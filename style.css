@@ -280,9 +280,11 @@ body {
   z-index: 1050 !important;
 }
 
-#ridersDrawer {
+#ridersDrawer,
+#convoyDrawer,
+#groupDrawer {
   position: fixed !important;
-  z-index: 1100 !important;
+  z-index: 9999 !important;
 }
 
 #simPanel {
@@ -785,20 +787,25 @@ body {
 }
 
 /* ==================== LEFT RIDERS DRAWER ==================== */
-#ridersDrawer {
+#ridersDrawer,
+#convoyDrawer,
+#groupDrawer {
   position: fixed;
   top: 0;
   left: 0;
   bottom: 0;
   width: 320px;
   max-width: 85vw;
-  z-index: 1100;
+  z-index: 9999;
   transform: translateX(-100%);
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-#ridersDrawer.open {
-  transform: translateX(0);
+#ridersDrawer.open,
+#convoyDrawer.open,
+#groupDrawer.open {
+  transform: translateX(0) !important;
+  pointer-events: auto !important;
 }
 
 .rider-card {

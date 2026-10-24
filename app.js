@@ -48,15 +48,52 @@ window.recenterCamera = function() {
   }
 };
 
-window.toggleRidersDrawer = function() {
+window.toggleGroupDrawer = function(forceOpen) {
   try {
     if (typeof playSound === "function") playSound("click");
-    const drawer = document.getElementById("ridersDrawer");
-    if (drawer) drawer.classList.toggle("open");
+    const drawer = document.getElementById("convoyDrawer") || 
+                   document.getElementById("groupDrawer") || 
+                   document.getElementById("ridersDrawer");
+    if (!drawer) return;
+
+    // Check if drawer is currently open
+    const isCurrentlyOpen = (
+      drawer.classList.contains("open") ||
+      drawer.style.transform === "translateX(0%)" ||
+      drawer.style.transform === "translateX(0px)" ||
+      drawer.style.transform === "none"
+    ) && drawer.style.display !== "none" && !drawer.classList.contains("hidden");
+
+    const shouldOpen = forceOpen !== undefined ? Boolean(forceOpen) : !isCurrentlyOpen;
+
+    if (shouldOpen) {
+      drawer.classList.remove("hidden", "-translate-x-full", "pointer-events-none");
+      drawer.classList.add("open");
+      drawer.style.display = "flex";
+      drawer.style.transform = "translateX(0%)";
+      drawer.style.zIndex = "9999";
+      drawer.style.opacity = "1";
+      drawer.style.pointerEvents = "auto";
+
+      if (typeof evaluateConvoyDistances === "function") {
+        evaluateConvoyDistances();
+      }
+    } else {
+      drawer.classList.remove("open");
+      drawer.classList.add("pointer-events-none");
+      drawer.style.transform = "translateX(-100%)";
+      drawer.style.pointerEvents = "none";
+      setTimeout(() => {
+        if (!drawer.classList.contains("open")) {
+          drawer.style.display = "none";
+        }
+      }, 300);
+    }
   } catch (err) {
-    console.warn("Toggle riders drawer notice:", err);
+    console.warn("Toggle group drawer notice:", err);
   }
 };
+window.toggleRidersDrawer = window.toggleGroupDrawer;
 
 window.copyInviteLink = function() {
   try {
@@ -137,12 +174,12 @@ window.leaveActiveTour = function() {
 // ==========================================
 // 1. SUPABASE INITIALIZATION (sbClient)
 // ==========================================
-const SUPABASE_URL = "https://iblaigoargdzrpahkbxt.supabase.co";
+const SUPABASE_URL = "https://iblaigoargdzrpahktxt.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_iXppRFLUtwNngEd1m80zVw_lWS8HgMV";
 
 // Direct Supabase REST API Helper (fetch with sb_publishable key & PostgREST headers)
 async function supabaseRest(endpoint, method = "GET", body = null) {
-  const url = `https://iblaigoargdzrpahkbxt.supabase.co/rest/v1/${endpoint}`;
+  const url = `https://iblaigoargdzrpahktxt.supabase.co/rest/v1/${endpoint}`;
   const options = {
     method: method.toUpperCase(),
     headers: {
@@ -965,16 +1002,16 @@ function renderGroupRidersList(leader) {
       }
 
       return `
-        <div class="${cardClass} cursor-pointer" onclick="centerOnRider('${r.id}')" title="Click to view on map">
-          <div class="flex items-center justify-between mb-1">
+        <div class="${cardClass} cursor-pointer group hover:border-emerald-400 transition-all" onclick="centerOnRider('${r.id}')" title="Tap to locate ${escapeHtml(r.rider_name)} on map">
+          <div class="flex items-center justify-between mb-1.5">
             <div class="flex items-center gap-1.5 font-cyber font-bold text-xs text-slate-100">
               ${isLeader ? '<i class="fa-solid fa-crown text-amber-400 text-xs"></i>' : '<i class="fa-solid fa-motorcycle text-neon-green text-xs"></i>'}
-              <span>${escapeHtml(r.rider_name)}</span>
-              ${isMe ? '<span class="text-[9px] text-slate-400 font-normal">(You)</span>' : ''}
+              <span class="truncate max-w-[130px]">${escapeHtml(r.rider_name)}</span>
+              ${isMe ? '<span class="text-[9px] text-emerald-400 font-semibold px-1 rounded bg-emerald-500/10 border border-emerald-500/30">You</span>' : ''}
             </div>
             ${statusBadge}
           </div>
-          <div class="flex items-center justify-between text-[11px] text-slate-400 font-semibold">
+          <div class="flex items-center justify-between text-[11px] text-slate-400 font-semibold mb-1.5">
             <span class="flex items-center gap-1">
               <i class="fa-solid fa-gauge text-slate-500 text-[10px]"></i>
               <strong class="text-neon-green font-hud">${speed}</strong> km/h
@@ -982,6 +1019,12 @@ function renderGroupRidersList(leader) {
             <span class="text-right ${isStraggler ? 'text-rose-400 font-bold' : 'text-slate-400'}">
               ${distText}
             </span>
+          </div>
+          <div class="pt-1.5 border-t border-slate-700/50 flex items-center justify-between text-[10px] text-neon-green font-medium">
+            <span class="flex items-center gap-1 group-hover:underline">
+              <i class="fa-solid fa-location-crosshairs text-[9px]"></i> Tap to locate on map
+            </span>
+            <i class="fa-solid fa-chevron-right text-[8px] text-slate-500 group-hover:text-neon-green group-hover:translate-x-0.5 transition-transform"></i>
           </div>
         </div>
       `;
@@ -997,6 +1040,10 @@ window.centerOnRider = function(riderId) {
     map.flyTo([rider.lat, rider.lng], 16, { animate: true, duration: 0.8 });
     showRadarToast("LOCATING RIDER", `Focused on ${rider.rider_name}`);
     playSound("click");
+    // On mobile devices, auto-close the drawer so the rider is clearly visible on map
+    if (window.innerWidth < 768 && typeof window.toggleGroupDrawer === "function") {
+      window.toggleGroupDrawer(false);
+    }
   }
 };
 
@@ -1877,12 +1924,14 @@ function updateRecenterButtonUI() {
 }
 
 function updateRidersCount() {
-  const total = allConvoyRiders.size || 1;
+  const total = Math.max(1, allConvoyRiders.size);
   const topCountEl = document.getElementById("activeRidersCount");
   const badgeCountEl = document.getElementById("drawerRidersCountBadge");
+  const topRightEl = document.getElementById("topRightRidersCount");
 
   if (topCountEl) topCountEl.textContent = `${total}`;
   if (badgeCountEl) badgeCountEl.textContent = `${total}`;
+  if (topRightEl) topRightEl.textContent = `${total}`;
 }
 
 function generateRoomCode() {
@@ -1895,7 +1944,11 @@ function generateUUID() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
   }
-  return "id_" + Math.random().toString(36).substring(2, 11) + "_" + Date.now();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === "x" ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
 }
 
 function saveSession(riderName, roomCode, isLeader) {
@@ -2220,13 +2273,22 @@ function initApp() {
 
   // Left Drawer Toggles
   const toggleDrawer = () => {
-    playSound("click");
-    if (ridersDrawer) ridersDrawer.classList.toggle("open");
+    if (typeof window.toggleGroupDrawer === "function") {
+      window.toggleGroupDrawer();
+    }
   };
 
+  const topRightGroupBtn = document.getElementById("topRightGroupBtn");
+  if (topRightGroupBtn) topRightGroupBtn.addEventListener("click", toggleDrawer);
   if (openRidersDrawerBtn) openRidersDrawerBtn.addEventListener("click", toggleDrawer);
   if (topRidersCountBtn) topRidersCountBtn.addEventListener("click", toggleDrawer);
-  if (closeRidersDrawerBtn) closeRidersDrawerBtn.addEventListener("click", toggleDrawer);
+  if (closeRidersDrawerBtn) {
+    closeRidersDrawerBtn.addEventListener("click", () => {
+      if (typeof window.toggleGroupDrawer === "function") {
+        window.toggleGroupDrawer(false);
+      }
+    });
+  }
 
   if (viewStragglerBtn) {
     viewStragglerBtn.addEventListener("click", () => {

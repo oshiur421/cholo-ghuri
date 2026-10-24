@@ -41,7 +41,7 @@
   <!-- Custom CSS -->
   <link rel="stylesheet" href="style.css">
 
-  <!-- Instant Modal Trigger Script (Available immediately upon HTML parse) -->
+  <!-- Instant Modal & Drawer Trigger Script (Available immediately upon HTML parse) -->
   <script>
     window.openJoinModal = function() {
       var modal = document.getElementById("onboardingModal");
@@ -68,6 +68,41 @@
         modal.style.pointerEvents = "none";
       }
     };
+    window.toggleGroupDrawer = function(forceOpen) {
+      var drawer = document.getElementById("convoyDrawer") || 
+                   document.getElementById("groupDrawer") || 
+                   document.getElementById("ridersDrawer");
+      if (!drawer) return;
+      var isOpen = (
+        drawer.classList.contains("open") ||
+        drawer.style.transform === "translateX(0%)" ||
+        drawer.style.transform === "translateX(0px)" ||
+        drawer.style.transform === "none"
+      ) && drawer.style.display !== "none" && !drawer.classList.contains("hidden");
+      var shouldOpen = forceOpen !== undefined ? Boolean(forceOpen) : !isOpen;
+
+      if (shouldOpen) {
+        drawer.classList.remove("hidden", "-translate-x-full", "pointer-events-none");
+        drawer.classList.add("open");
+        drawer.style.display = "flex";
+        drawer.style.transform = "translateX(0%)";
+        drawer.style.zIndex = "9999";
+        drawer.style.opacity = "1";
+        drawer.style.pointerEvents = "auto";
+        if (typeof evaluateConvoyDistances === "function") evaluateConvoyDistances();
+      } else {
+        drawer.classList.remove("open");
+        drawer.classList.add("pointer-events-none");
+        drawer.style.transform = "translateX(-100%)";
+        drawer.style.pointerEvents = "none";
+        setTimeout(function() {
+          if (!drawer.classList.contains("open")) {
+            drawer.style.display = "none";
+          }
+        }, 300);
+      }
+    };
+    window.toggleRidersDrawer = window.toggleGroupDrawer;
   </script>
 </head>
 <body class="bg-cyber-dark text-slate-100 flex flex-col h-screen w-screen overflow-hidden select-none">
@@ -115,24 +150,32 @@
           </div>
         </div>
 
-        <!-- Right: Traffic Speed Limit Sign & Digital Speedometer -->
-        <div class="glass-panel rounded-xl sm:rounded-2xl p-1 sm:px-3 sm:py-1.5 flex items-center gap-1.5 sm:gap-3 pointer-events-auto border border-slate-700/60 shadow-2xl flex-shrink-0">
-          <!-- Circular Traffic Speed Limit Sign -->
-          <div class="flex flex-col items-center">
-            <div id="speedLimitSign" class="speed-limit-sign" title="Highway Speed Limit">
-              <span id="speedLimitVal" class="speed-limit-number">80</span>
-              <span class="speed-limit-unit">LIMIT</span>
+        <!-- Right: Traffic Speed Limit Sign, Digital Speedometer & Top-Right Group Badge -->
+        <div class="flex items-center gap-1.5 sm:gap-2.5">
+          <div class="glass-panel rounded-xl sm:rounded-2xl p-1 sm:px-3 sm:py-1.5 flex items-center gap-1.5 sm:gap-3 pointer-events-auto border border-slate-700/60 shadow-2xl flex-shrink-0">
+            <!-- Circular Traffic Speed Limit Sign -->
+            <div class="flex flex-col items-center">
+              <div id="speedLimitSign" class="speed-limit-sign" title="Highway Speed Limit">
+                <span id="speedLimitVal" class="speed-limit-number">80</span>
+                <span class="speed-limit-unit">LIMIT</span>
+              </div>
+            </div>
+
+            <!-- Digital Speedometer -->
+            <div class="flex flex-col items-end pr-0.5 sm:pr-1">
+              <div class="flex items-baseline gap-0.5">
+                <span id="liveSpeedDisplay" class="font-hud font-black text-xl sm:text-3xl text-neon-green speedo-glow leading-none">00</span>
+                <span class="font-cyber font-bold text-[8px] sm:text-xs text-slate-400">KM/H</span>
+              </div>
+              <span id="speedStatusLabel" class="text-[8px] sm:text-[9px] font-semibold text-emerald-400 uppercase tracking-wider">Cruising</span>
             </div>
           </div>
 
-          <!-- Digital Speedometer -->
-          <div class="flex flex-col items-end pr-0.5 sm:pr-1">
-            <div class="flex items-baseline gap-0.5">
-              <span id="liveSpeedDisplay" class="font-hud font-black text-xl sm:text-3xl text-neon-green speedo-glow leading-none">00</span>
-              <span class="font-cyber font-bold text-[8px] sm:text-xs text-slate-400">KM/H</span>
-            </div>
-            <span id="speedStatusLabel" class="text-[8px] sm:text-[9px] font-semibold text-emerald-400 uppercase tracking-wider">Cruising</span>
-          </div>
+          <!-- Top-Right Group Badge Button (Desktop/Tablet) -->
+          <button id="topRightGroupBtn" onclick="window.toggleGroupDrawer && window.toggleGroupDrawer()" title="Open Group Riders Drawer" class="hidden sm:flex glass-panel-neon hover:border-emerald-400 active:scale-95 rounded-xl sm:rounded-2xl px-2.5 py-1.5 sm:px-3 sm:py-2 items-center gap-1.5 border border-emerald-500/40 text-slate-200 transition-all shadow-2xl cursor-pointer pointer-events-auto flex-shrink-0 whitespace-nowrap">
+            <span class="radar-beacon w-2 h-2 rounded-full bg-neon-green"></span>
+            <span class="font-cyber font-bold text-xs uppercase tracking-wider">GROUP (<span id="topRightRidersCount">1</span>)</span>
+          </button>
         </div>
 
       </div>
@@ -153,7 +196,7 @@
         </div>
 
         <!-- Group (X) Riders Drawer Button -->
-        <button id="topRidersCountBtn" onclick="window.toggleRidersDrawer && window.toggleRidersDrawer()" title="View Group Riders List & Distances" class="glass-panel-neon hover:border-emerald-400 active:scale-95 rounded-xl sm:rounded-2xl px-2.5 py-1.5 sm:px-4 sm:py-2 flex items-center gap-1.5 border border-emerald-500/40 text-slate-200 transition-all shadow-2xl cursor-pointer flex-shrink-0 whitespace-nowrap">
+        <button id="topRidersCountBtn" onclick="window.toggleGroupDrawer && window.toggleGroupDrawer()" title="View Group Riders List & Distances" class="glass-panel-neon hover:border-emerald-400 active:scale-95 rounded-xl sm:rounded-2xl px-2.5 py-1.5 sm:px-4 sm:py-2 flex items-center gap-1.5 border border-emerald-500/40 text-slate-200 transition-all shadow-2xl cursor-pointer flex-shrink-0 whitespace-nowrap">
           <span class="radar-beacon w-2 h-2 rounded-full bg-neon-green"></span>
           <span class="font-cyber font-bold text-[10px] sm:text-xs uppercase tracking-wider">GROUP (<span id="activeRidersCount">1</span>)</span>
           <i class="fa-solid fa-chevron-right text-[8px] sm:text-[9px] text-slate-400"></i>
@@ -223,36 +266,52 @@
   </div>
 
   <!-- ==================== LEFT FLOATING RIDERS BUTTON (DESKTOP) ==================== -->
-  <button id="openRidersDrawerBtn" onclick="window.toggleRidersDrawer && window.toggleRidersDrawer()" title="Open Convoy Riders List" class="hidden md:flex fixed left-4 top-28 z-[1050] glove-btn glass-panel-neon hover:scale-105 active:scale-95 rounded-2xl px-3 py-2.5 items-center gap-2 border border-emerald-500/40 text-slate-200 transition-all shadow-2xl cursor-pointer">
+  <button id="openRidersDrawerBtn" onclick="window.toggleGroupDrawer && window.toggleGroupDrawer()" title="Open Convoy Riders List" class="hidden md:flex fixed left-4 top-28 z-[1050] glove-btn glass-panel-neon hover:scale-105 active:scale-95 rounded-2xl px-3 py-2.5 items-center gap-2 border border-emerald-500/40 text-slate-200 transition-all shadow-2xl cursor-pointer">
     <i class="fa-solid fa-users text-neon-green text-sm"></i>
     <span class="font-cyber font-bold text-xs uppercase tracking-wider">Group (<span id="drawerRidersCountBadge">1</span>)</span>
   </button>
 
   <!-- ==================== LEFT COLLAPSIBLE GROUP RIDERS DRAWER ==================== -->
-  <aside id="ridersDrawer" class="glass-panel-neon flex flex-col border-r border-emerald-500/30 shadow-[0_0_50px_rgba(0,0,0,0.95)]">
+  <aside id="ridersDrawer" data-group-drawer="true" class="glass-panel-neon flex flex-col border-r border-emerald-500/30 shadow-[0_0_50px_rgba(0,0,0,0.95)]">
     <!-- Drawer Header -->
-    <div class="p-4 border-b border-emerald-500/20 flex items-center justify-between">
-      <div class="flex items-center gap-2.5">
-        <div class="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-neon-green">
-          <i class="fa-solid fa-users-viewfinder text-sm"></i>
+    <div class="p-3.5 sm:p-4 border-b border-emerald-500/20 flex flex-col gap-2.5">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-neon-green">
+            <i class="fa-solid fa-users-viewfinder text-sm"></i>
+          </div>
+          <div>
+            <h3 class="font-cyber font-black text-sm text-slate-100 tracking-wider uppercase">CONVOY SQUAD</h3>
+            <span class="text-[10px] font-hud text-neon-green font-bold tracking-widest" id="drawerRoomCode">ROOM: ----</span>
+          </div>
         </div>
-        <div>
-          <h3 class="font-cyber font-black text-sm text-slate-100 tracking-wider uppercase">CONVOY SQUAD</h3>
-          <span class="text-[10px] font-hud text-neon-green font-bold tracking-widest" id="drawerRoomCode">ROOM: ----</span>
-        </div>
+        <button id="closeRidersDrawerBtn" onclick="window.toggleGroupDrawer && window.toggleGroupDrawer(false)" title="Close Riders Drawer" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 hover:text-white flex items-center justify-center text-xs cursor-pointer border border-slate-700 transition-all">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
       </div>
-      <button id="closeRidersDrawerBtn" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center text-xs">
-        <i class="fa-solid fa-xmark"></i>
+
+      <!-- Quick + Invite Friend Button -->
+      <button onclick="window.copyInviteLink && window.copyInviteLink()" title="Copy Tour Invite Link to Share" class="w-full py-2 px-3 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 active:scale-95 border border-emerald-500/50 text-neon-green font-cyber font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer">
+        <i class="fa-solid fa-user-plus text-xs"></i>
+        <span>+ Invite Friend</span>
       </button>
     </div>
 
     <!-- Convoy Leader Status Banner -->
-    <div class="px-4 py-2.5 bg-black/40 border-b border-slate-800 flex items-center justify-between text-xs">
+    <div class="px-4 py-2 bg-black/40 border-b border-slate-800 flex items-center justify-between text-xs">
       <div class="flex items-center gap-1.5 text-amber-400 font-cyber font-bold">
         <i class="fa-solid fa-crown text-xs"></i>
         <span id="drawerLeaderName">Leader: Searching...</span>
       </div>
       <span class="text-[10px] text-slate-400">Max Gap: <strong class="text-rose-400">1.5 km</strong></span>
+    </div>
+
+    <!-- Connected Riders Subheader -->
+    <div class="px-4 pt-2.5 pb-1 flex items-center justify-between text-[10px] font-cyber font-bold tracking-wider text-slate-400 uppercase">
+      <span>CONNECTED RIDERS</span>
+      <span class="text-neon-green flex items-center gap-1 text-[9px] font-medium lowercase">
+        <i class="fa-solid fa-location-crosshairs text-[9px]"></i> tap to locate
+      </span>
     </div>
 
     <!-- Scrollable Riders List -->
