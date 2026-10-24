@@ -48,6 +48,64 @@ window.recenterCamera = function() {
   }
 };
 
+window.openGroupDrawer = function() {
+  try {
+    if (typeof playSound === "function") playSound("click");
+    const drawer = document.getElementById("convoyDrawer") || 
+                   document.getElementById("groupDrawer") || 
+                   document.getElementById("ridersDrawer");
+    if (drawer) {
+      drawer.classList.remove("hidden", "-translate-x-full", "pointer-events-none");
+      drawer.classList.add("translate-x-0", "open");
+      drawer.style.display = "flex";
+      drawer.style.transform = "translateX(0%)";
+      drawer.style.zIndex = "99999";
+      drawer.style.opacity = "1";
+      drawer.style.pointerEvents = "auto";
+    }
+
+    const backdrop = document.getElementById("drawerBackdrop");
+    if (backdrop) {
+      backdrop.classList.remove("hidden", "pointer-events-none");
+      backdrop.style.display = "block";
+      backdrop.style.opacity = "1";
+      backdrop.style.pointerEvents = "auto";
+    }
+
+    if (typeof evaluateConvoyDistances === "function") {
+      evaluateConvoyDistances();
+    }
+  } catch (err) {
+    console.warn("Open group drawer error:", err);
+  }
+};
+
+window.closeGroupDrawer = function() {
+  try {
+    if (typeof playSound === "function") playSound("click");
+    const drawer = document.getElementById("convoyDrawer") || 
+                   document.getElementById("groupDrawer") || 
+                   document.getElementById("ridersDrawer");
+    if (drawer) {
+      drawer.classList.remove("translate-x-0", "open");
+      drawer.classList.add("hidden", "-translate-x-full", "pointer-events-none");
+      drawer.style.display = "none";
+      drawer.style.transform = "translateX(-100%)";
+      drawer.style.pointerEvents = "none";
+    }
+
+    const backdrop = document.getElementById("drawerBackdrop");
+    if (backdrop) {
+      backdrop.classList.add("hidden", "pointer-events-none");
+      backdrop.style.display = "none";
+      backdrop.style.opacity = "0";
+      backdrop.style.pointerEvents = "none";
+    }
+  } catch (err) {
+    console.warn("Close group drawer error:", err);
+  }
+};
+
 window.toggleGroupDrawer = function(forceOpen) {
   try {
     if (typeof playSound === "function") playSound("click");
@@ -56,41 +114,41 @@ window.toggleGroupDrawer = function(forceOpen) {
                    document.getElementById("ridersDrawer");
     if (!drawer) return;
 
-    // Check if drawer is currently open
-    const isCurrentlyOpen = (
-      drawer.classList.contains("open") ||
-      drawer.style.transform === "translateX(0%)" ||
-      drawer.style.transform === "translateX(0px)" ||
-      drawer.style.transform === "none"
-    ) && drawer.style.display !== "none" && !drawer.classList.contains("hidden");
+    if (forceOpen === true) {
+      window.openGroupDrawer();
+      return;
+    }
+    if (forceOpen === false) {
+      window.closeGroupDrawer();
+      return;
+    }
 
-    const shouldOpen = forceOpen !== undefined ? Boolean(forceOpen) : !isCurrentlyOpen;
+    // Toggle drawer logic
+    drawer.classList.remove("hidden", "-translate-x-full", "pointer-events-none");
+    drawer.style.display = "flex";
+    drawer.style.transform = "translateX(0%)";
+    drawer.style.zIndex = "99999";
+    drawer.style.opacity = "1";
+    drawer.style.pointerEvents = "auto";
+    const isNowOpen = drawer.classList.toggle("translate-x-0");
 
-    if (shouldOpen) {
-      drawer.classList.remove("hidden", "-translate-x-full", "pointer-events-none");
+    if (isNowOpen) {
       drawer.classList.add("open");
-      drawer.style.display = "flex";
-      drawer.style.transform = "translateX(0%)";
-      drawer.style.zIndex = "9999";
-      drawer.style.opacity = "1";
-      drawer.style.pointerEvents = "auto";
-
+      const backdrop = document.getElementById("drawerBackdrop");
+      if (backdrop) {
+        backdrop.classList.remove("hidden", "pointer-events-none");
+        backdrop.style.display = "block";
+        backdrop.style.opacity = "1";
+        backdrop.style.pointerEvents = "auto";
+      }
       if (typeof evaluateConvoyDistances === "function") {
         evaluateConvoyDistances();
       }
     } else {
-      drawer.classList.remove("open");
-      drawer.classList.add("pointer-events-none");
-      drawer.style.transform = "translateX(-100%)";
-      drawer.style.pointerEvents = "none";
-      setTimeout(() => {
-        if (!drawer.classList.contains("open")) {
-          drawer.style.display = "none";
-        }
-      }, 300);
+      window.closeGroupDrawer();
     }
   } catch (err) {
-    console.warn("Toggle group drawer notice:", err);
+    console.warn("Toggle group drawer error:", err);
   }
 };
 window.toggleRidersDrawer = window.toggleGroupDrawer;
@@ -1041,8 +1099,12 @@ window.centerOnRider = function(riderId) {
     showRadarToast("LOCATING RIDER", `Focused on ${rider.rider_name}`);
     playSound("click");
     // On mobile devices, auto-close the drawer so the rider is clearly visible on map
-    if (window.innerWidth < 768 && typeof window.toggleGroupDrawer === "function") {
-      window.toggleGroupDrawer(false);
+    if (window.innerWidth < 768) {
+      if (typeof window.closeGroupDrawer === "function") {
+        window.closeGroupDrawer();
+      } else if (typeof window.toggleGroupDrawer === "function") {
+        window.toggleGroupDrawer(false);
+      }
     }
   }
 };
@@ -2163,7 +2225,10 @@ function initApp() {
   const openRidersDrawerBtn = document.getElementById("openRidersDrawerBtn");
   const closeRidersDrawerBtn = document.getElementById("closeRidersDrawerBtn");
   const topRidersCountBtn = document.getElementById("topRidersCountBtn");
-  const ridersDrawer = document.getElementById("ridersDrawer");
+  const ridersDrawer = document.getElementById("convoyDrawer") || 
+                       document.getElementById("groupDrawer") || 
+                       document.getElementById("ridersDrawer");
+  const drawerBackdrop = document.getElementById("drawerBackdrop");
 
   // PC Dev Simulator Controls
   const simPanel = document.getElementById("simPanel");
@@ -2272,7 +2337,8 @@ function initApp() {
   }
 
   // Left Drawer Toggles
-  const toggleDrawer = () => {
+  const toggleDrawer = (e) => {
+    if (e && typeof e.stopPropagation === "function") e.stopPropagation();
     if (typeof window.toggleGroupDrawer === "function") {
       window.toggleGroupDrawer();
     }
@@ -2283,8 +2349,21 @@ function initApp() {
   if (openRidersDrawerBtn) openRidersDrawerBtn.addEventListener("click", toggleDrawer);
   if (topRidersCountBtn) topRidersCountBtn.addEventListener("click", toggleDrawer);
   if (closeRidersDrawerBtn) {
-    closeRidersDrawerBtn.addEventListener("click", () => {
-      if (typeof window.toggleGroupDrawer === "function") {
+    closeRidersDrawerBtn.addEventListener("click", (e) => {
+      if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+      if (typeof window.closeGroupDrawer === "function") {
+        window.closeGroupDrawer();
+      } else if (typeof window.toggleGroupDrawer === "function") {
+        window.toggleGroupDrawer(false);
+      }
+    });
+  }
+  if (drawerBackdrop) {
+    drawerBackdrop.addEventListener("click", (e) => {
+      if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+      if (typeof window.closeGroupDrawer === "function") {
+        window.closeGroupDrawer();
+      } else if (typeof window.toggleGroupDrawer === "function") {
         window.toggleGroupDrawer(false);
       }
     });

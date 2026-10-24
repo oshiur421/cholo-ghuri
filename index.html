@@ -68,38 +68,113 @@
         modal.style.pointerEvents = "none";
       }
     };
-    window.toggleGroupDrawer = function(forceOpen) {
-      var drawer = document.getElementById("convoyDrawer") || 
-                   document.getElementById("groupDrawer") || 
-                   document.getElementById("ridersDrawer");
-      if (!drawer) return;
-      var isOpen = (
-        drawer.classList.contains("open") ||
-        drawer.style.transform === "translateX(0%)" ||
-        drawer.style.transform === "translateX(0px)" ||
-        drawer.style.transform === "none"
-      ) && drawer.style.display !== "none" && !drawer.classList.contains("hidden");
-      var shouldOpen = forceOpen !== undefined ? Boolean(forceOpen) : !isOpen;
+    // Safe alias mapping so document.getElementById returns the drawer for convoyDrawer, groupDrawer, or ridersDrawer
+    if (typeof document !== "undefined") {
+      var origGetElementById = document.getElementById.bind(document);
+      document.getElementById = function(id) {
+        var el = origGetElementById(id);
+        if (!el) {
+          if (id === "ridersDrawer" || id === "groupDrawer") {
+            el = origGetElementById("convoyDrawer");
+          } else if (id === "convoyDrawer") {
+            el = origGetElementById("ridersDrawer") || origGetElementById("groupDrawer");
+          }
+        }
+        return el;
+      };
+    }
 
-      if (shouldOpen) {
+    window.openGroupDrawer = function() {
+      try {
+        var drawer = document.getElementById("convoyDrawer") || 
+                     document.getElementById("groupDrawer") || 
+                     document.getElementById("ridersDrawer");
+        if (!drawer) return;
         drawer.classList.remove("hidden", "-translate-x-full", "pointer-events-none");
-        drawer.classList.add("open");
+        drawer.classList.add("translate-x-0", "open");
         drawer.style.display = "flex";
         drawer.style.transform = "translateX(0%)";
-        drawer.style.zIndex = "9999";
+        drawer.style.zIndex = "99999";
         drawer.style.opacity = "1";
         drawer.style.pointerEvents = "auto";
+
+        var backdrop = document.getElementById("drawerBackdrop");
+        if (backdrop) {
+          backdrop.classList.remove("hidden", "pointer-events-none");
+          backdrop.style.display = "block";
+          backdrop.style.opacity = "1";
+          backdrop.style.pointerEvents = "auto";
+        }
         if (typeof evaluateConvoyDistances === "function") evaluateConvoyDistances();
-      } else {
-        drawer.classList.remove("open");
-        drawer.classList.add("pointer-events-none");
-        drawer.style.transform = "translateX(-100%)";
-        drawer.style.pointerEvents = "none";
-        setTimeout(function() {
-          if (!drawer.classList.contains("open")) {
-            drawer.style.display = "none";
+      } catch (e) {
+        console.warn("openGroupDrawer notice:", e);
+      }
+    };
+
+    window.closeGroupDrawer = function() {
+      try {
+        var drawer = document.getElementById("convoyDrawer") || 
+                     document.getElementById("groupDrawer") || 
+                     document.getElementById("ridersDrawer");
+        if (drawer) {
+          drawer.classList.remove("translate-x-0", "open");
+          drawer.classList.add("hidden", "-translate-x-full", "pointer-events-none");
+          drawer.style.display = "none";
+          drawer.style.transform = "translateX(-100%)";
+          drawer.style.pointerEvents = "none";
+        }
+        var backdrop = document.getElementById("drawerBackdrop");
+        if (backdrop) {
+          backdrop.classList.add("hidden", "pointer-events-none");
+          backdrop.style.display = "none";
+          backdrop.style.opacity = "0";
+          backdrop.style.pointerEvents = "none";
+        }
+      } catch (e) {
+        console.warn("closeGroupDrawer notice:", e);
+      }
+    };
+
+    window.toggleGroupDrawer = function(forceOpen) {
+      try {
+        var drawer = document.getElementById("convoyDrawer") || 
+                     document.getElementById("groupDrawer") || 
+                     document.getElementById("ridersDrawer");
+        if (!drawer) return;
+
+        if (forceOpen === true) {
+          window.openGroupDrawer();
+          return;
+        }
+        if (forceOpen === false) {
+          window.closeGroupDrawer();
+          return;
+        }
+
+        // Drawer toggle logic conforming to exact requirements
+        drawer.classList.remove("hidden", "-translate-x-full", "pointer-events-none");
+        drawer.style.display = "flex";
+        drawer.style.transform = "translateX(0%)";
+        drawer.style.zIndex = "99999";
+        drawer.style.opacity = "1";
+        drawer.style.pointerEvents = "auto";
+        var isNowOpen = drawer.classList.toggle("translate-x-0");
+
+        if (isNowOpen) {
+          drawer.classList.add("open");
+          var backdrop = document.getElementById("drawerBackdrop");
+          if (backdrop) {
+            backdrop.classList.remove("hidden", "pointer-events-none");
+            backdrop.style.display = "block";
+            backdrop.style.opacity = "1";
+            backdrop.style.pointerEvents = "auto";
           }
-        }, 300);
+          if (typeof evaluateConvoyDistances === "function") evaluateConvoyDistances();
+        } else {
+          window.closeGroupDrawer();
+        }
+      } catch (e) {
+        console.warn("toggleGroupDrawer notice:", e);
       }
     };
     window.toggleRidersDrawer = window.toggleGroupDrawer;
@@ -173,8 +248,8 @@
 
           <!-- Top-Right Group Badge Button (Desktop/Tablet) -->
           <button id="topRightGroupBtn" onclick="window.toggleGroupDrawer && window.toggleGroupDrawer()" title="Open Group Riders Drawer" class="hidden sm:flex glass-panel-neon hover:border-emerald-400 active:scale-95 rounded-xl sm:rounded-2xl px-2.5 py-1.5 sm:px-3 sm:py-2 items-center gap-1.5 border border-emerald-500/40 text-slate-200 transition-all shadow-2xl cursor-pointer pointer-events-auto flex-shrink-0 whitespace-nowrap">
-            <span class="radar-beacon w-2 h-2 rounded-full bg-neon-green"></span>
-            <span class="font-cyber font-bold text-xs uppercase tracking-wider">GROUP (<span id="topRightRidersCount">1</span>)</span>
+            <span class="radar-beacon w-2 h-2 rounded-full bg-neon-green pointer-events-none"></span>
+            <span class="font-cyber font-bold text-xs uppercase tracking-wider pointer-events-none">GROUP (<span id="topRightRidersCount">1</span>)</span>
           </button>
         </div>
 
@@ -196,10 +271,10 @@
         </div>
 
         <!-- Group (X) Riders Drawer Button -->
-        <button id="topRidersCountBtn" onclick="window.toggleGroupDrawer && window.toggleGroupDrawer()" title="View Group Riders List & Distances" class="glass-panel-neon hover:border-emerald-400 active:scale-95 rounded-xl sm:rounded-2xl px-2.5 py-1.5 sm:px-4 sm:py-2 flex items-center gap-1.5 border border-emerald-500/40 text-slate-200 transition-all shadow-2xl cursor-pointer flex-shrink-0 whitespace-nowrap">
-          <span class="radar-beacon w-2 h-2 rounded-full bg-neon-green"></span>
-          <span class="font-cyber font-bold text-[10px] sm:text-xs uppercase tracking-wider">GROUP (<span id="activeRidersCount">1</span>)</span>
-          <i class="fa-solid fa-chevron-right text-[8px] sm:text-[9px] text-slate-400"></i>
+        <button id="topRidersCountBtn" onclick="window.toggleGroupDrawer && window.toggleGroupDrawer()" title="View Group Riders List & Distances" class="glass-panel-neon hover:border-emerald-400 active:scale-95 rounded-xl sm:rounded-2xl px-2.5 py-1.5 sm:px-4 sm:py-2 flex items-center gap-1.5 border border-emerald-500/40 text-slate-200 transition-all shadow-2xl cursor-pointer pointer-events-auto flex-shrink-0 whitespace-nowrap">
+          <span class="radar-beacon w-2 h-2 rounded-full bg-neon-green pointer-events-none"></span>
+          <span class="font-cyber font-bold text-[10px] sm:text-xs uppercase tracking-wider pointer-events-none">GROUP (<span id="activeRidersCount">1</span>)</span>
+          <i class="fa-solid fa-chevron-right text-[8px] sm:text-[9px] text-slate-400 pointer-events-none"></i>
         </button>
       </div>
 
@@ -266,13 +341,16 @@
   </div>
 
   <!-- ==================== LEFT FLOATING RIDERS BUTTON (DESKTOP) ==================== -->
-  <button id="openRidersDrawerBtn" onclick="window.toggleGroupDrawer && window.toggleGroupDrawer()" title="Open Convoy Riders List" class="hidden md:flex fixed left-4 top-28 z-[1050] glove-btn glass-panel-neon hover:scale-105 active:scale-95 rounded-2xl px-3 py-2.5 items-center gap-2 border border-emerald-500/40 text-slate-200 transition-all shadow-2xl cursor-pointer">
-    <i class="fa-solid fa-users text-neon-green text-sm"></i>
-    <span class="font-cyber font-bold text-xs uppercase tracking-wider">Group (<span id="drawerRidersCountBadge">1</span>)</span>
+  <button id="openRidersDrawerBtn" onclick="window.toggleGroupDrawer && window.toggleGroupDrawer()" title="Open Convoy Riders List" class="hidden md:flex fixed left-4 top-28 z-[1050] glove-btn glass-panel-neon hover:scale-105 active:scale-95 rounded-2xl px-3 py-2.5 items-center gap-2 border border-emerald-500/40 text-slate-200 transition-all shadow-2xl cursor-pointer pointer-events-auto">
+    <i class="fa-solid fa-users text-neon-green text-sm pointer-events-none"></i>
+    <span class="font-cyber font-bold text-xs uppercase tracking-wider pointer-events-none">Group (<span id="drawerRidersCountBadge">1</span>)</span>
   </button>
 
+  <!-- ==================== MOBILE DRAWER BACKDROP OVERLAY ==================== -->
+  <div id="drawerBackdrop" class="hidden fixed inset-0 z-[99990] bg-black/65 backdrop-blur-sm transition-opacity duration-300" onclick="window.closeGroupDrawer ? window.closeGroupDrawer() : (window.toggleGroupDrawer && window.toggleGroupDrawer(false))" style="display: none; opacity: 0; pointer-events: none;"></div>
+
   <!-- ==================== LEFT COLLAPSIBLE GROUP RIDERS DRAWER ==================== -->
-  <aside id="ridersDrawer" data-group-drawer="true" class="glass-panel-neon flex flex-col border-r border-emerald-500/30 shadow-[0_0_50px_rgba(0,0,0,0.95)]">
+  <aside id="convoyDrawer" data-group-drawer="true" data-alias="ridersDrawer groupDrawer" class="hidden -translate-x-full glass-panel-neon flex flex-col border-r border-emerald-500/30 shadow-[0_0_50px_rgba(0,0,0,0.95)]" style="display: none; transform: translateX(-100%); pointer-events: none;">
     <!-- Drawer Header -->
     <div class="p-3.5 sm:p-4 border-b border-emerald-500/20 flex flex-col gap-2.5">
       <div class="flex items-center justify-between">
@@ -285,7 +363,7 @@
             <span class="text-[10px] font-hud text-neon-green font-bold tracking-widest" id="drawerRoomCode">ROOM: ----</span>
           </div>
         </div>
-        <button id="closeRidersDrawerBtn" onclick="window.toggleGroupDrawer && window.toggleGroupDrawer(false)" title="Close Riders Drawer" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 hover:text-white flex items-center justify-center text-xs cursor-pointer border border-slate-700 transition-all">
+        <button id="closeRidersDrawerBtn" onclick="window.closeGroupDrawer ? window.closeGroupDrawer() : (window.toggleGroupDrawer && window.toggleGroupDrawer(false))" title="Close Riders Drawer" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 hover:text-white flex items-center justify-center text-xs cursor-pointer border border-slate-700 transition-all">
           <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
