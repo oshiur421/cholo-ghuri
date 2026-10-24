@@ -241,7 +241,8 @@ body {
   top: 0 !important;
   left: 0 !important;
   right: 0 !important;
-  z-index: 1000 !important;
+  z-index: 10000 !important;
+  pointer-events: none !important;
   max-width: 100vw !important;
   padding: 8px !important;
   box-sizing: border-box !important;
@@ -995,6 +996,14 @@ body {
 /* Teleport cursor state on map */
 .teleport-active #map {
   cursor: crosshair !important;
+}
+
+/* Onboarding Modal Strict Hide State */
+#onboardingModal.hidden {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
 }
 
 

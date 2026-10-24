@@ -25,12 +25,140 @@ window.closeJoinModal = function() {
   const modal = document.getElementById("onboardingModal");
   if (modal) {
     modal.classList.add("hidden", "opacity-0", "pointer-events-none");
-    modal.style.removeProperty("display");
-    modal.style.removeProperty("opacity");
-    modal.style.removeProperty("pointer-events");
+    if (typeof modal.style.removeProperty === "function") {
+      modal.style.removeProperty("display");
+      modal.style.removeProperty("opacity");
+      modal.style.removeProperty("pointer-events");
+    }
     modal.style.display = "none";
     modal.style.opacity = "0";
     modal.style.pointerEvents = "none";
+    modal.style.visibility = "hidden";
+    modal.setAttribute("aria-hidden", "true");
+  }
+};
+
+window.submitOnboarding = function(event) {
+  if (event) {
+    if (typeof event.preventDefault === "function") event.preventDefault();
+    if (typeof event.stopPropagation === "function") event.stopPropagation();
+  }
+
+  if (typeof playSound === "function") playSound("engine");
+
+  const riderNameInput = document.getElementById("riderNameInput");
+  const roomCodeInput = document.getElementById("roomCodeInput");
+  const isLeaderCheckbox = document.getElementById("isLeaderCheckbox");
+
+  // a) Read #riderNameInput and #roomCodeInput. If empty, fallback to a default name and pre-generated room code
+  let name = riderNameInput ? riderNameInput.value.trim() : "";
+  if (!name) {
+    name = "Rider_" + Math.floor(100 + Math.random() * 900);
+    if (riderNameInput) riderNameInput.value = name;
+  }
+
+  let code = roomCodeInput ? roomCodeInput.value.trim().toUpperCase() : "";
+  if (!code || code === "----") {
+    code = typeof generateRoomCode === "function" ? generateRoomCode() : "DHAKA" + Math.floor(100 + Math.random() * 900);
+    if (roomCodeInput) roomCodeInput.value = code;
+  }
+
+  const isLeader = isLeaderCheckbox ? Boolean(isLeaderCheckbox.checked) : false;
+
+  // b) Save session data correctly into sessionStorage
+  let riderId = (typeof currentSession !== "undefined" && currentSession && currentSession.riderId) ? currentSession.riderId : null;
+  const isDifferent = !riderId ||
+    (typeof currentSession !== "undefined" && (
+      !currentSession.riderName ||
+      !currentSession.roomCode ||
+      currentSession.riderName.trim().toLowerCase() !== name.toLowerCase() ||
+      currentSession.roomCode.trim().toUpperCase() !== code
+    ));
+
+  if (isDifferent) {
+    riderId = typeof generateUUID === "function" ? generateUUID() : ("rider_" + Date.now());
+  }
+
+  const sessionData = {
+    riderId,
+    riderName: name,
+    roomCode: code,
+    isLeader
+  };
+
+  if (typeof currentSession !== "undefined") {
+    currentSession = sessionData;
+  }
+
+  try {
+    const key = typeof SESSION_STORAGE_KEY !== "undefined" ? SESSION_STORAGE_KEY : "cholo_ghuri_session";
+    sessionStorage.setItem(key, JSON.stringify(sessionData));
+  } catch (e) {}
+
+  // Update Top HUD room code and captain indicators
+  const roomCodeEl = document.getElementById("activeRoomCode");
+  const drawerRoomCode = document.getElementById("drawerRoomCode");
+  if (roomCodeEl) roomCodeEl.textContent = code;
+  if (drawerRoomCode) drawerRoomCode.textContent = `ROOM: ${code}`;
+
+  const captainBadge = document.getElementById("captainBadge");
+  if (captainBadge) {
+    if (isLeader) {
+      captainBadge.classList.remove("hidden");
+    } else {
+      captainBadge.classList.add("hidden");
+    }
+  }
+
+  // c) Forcefully hide and remove the onboarding modal (#onboardingModal)
+  const modal = document.getElementById("onboardingModal");
+  if (modal) {
+    modal.classList.add("hidden", "opacity-0", "pointer-events-none");
+    if (typeof modal.style.removeProperty === "function") {
+      modal.style.removeProperty("display");
+      modal.style.removeProperty("opacity");
+      modal.style.removeProperty("pointer-events");
+    }
+    modal.style.display = "none";
+    modal.style.opacity = "0";
+    modal.style.pointerEvents = "none";
+    modal.style.visibility = "hidden";
+    modal.setAttribute("aria-hidden", "true");
+  }
+  if (typeof window.closeJoinModal === "function") {
+    window.closeJoinModal();
+  }
+
+  // d) Immediately initialize or resume the Leaflet map (map.invalidateSize()) and trigger geolocation lookup without blocking map rendering if GPS takes too long
+  if (typeof initMap === "function") {
+    initMap();
+  }
+  if (typeof map !== "undefined" && map) {
+    map.invalidateSize();
+    setTimeout(() => { if (map) map.invalidateSize(); }, 100);
+    setTimeout(() => { if (map) map.invalidateSize(); }, 300);
+    setTimeout(() => { if (map) map.invalidateSize(); }, 600);
+  }
+
+  // Trigger quick non-blocking geolocation lookup with Dhaka fallback (23.8103, 90.4125)
+  if (typeof isSimulating !== "undefined" && !isSimulating) {
+    if (typeof requestQuickGeolocation === "function") {
+      requestQuickGeolocation();
+    } else if (typeof startGPSTracking === "function") {
+      startGPSTracking();
+    }
+  }
+
+  // e) Start the dual sync loop (runDualSyncLoop()) and show a success toast: "🚀 Joined Convoy Successfully!"
+  if (typeof joinSupabaseRoom === "function") {
+    joinSupabaseRoom(code);
+  }
+  if (typeof runDualSyncLoop === "function") {
+    runDualSyncLoop();
+  }
+
+  if (typeof showRadarToast === "function") {
+    showRadarToast("🚀 Joined Convoy Successfully!", `Riding as ${name} in tour room ${code}`);
   }
 };
 
@@ -1743,6 +1871,119 @@ function removeRemoteRiderMarker(riderId) {
 // ==========================================
 // 13. GPS TELEMETRY & HARDWARE TRACKING
 // ==========================================
+function requestQuickGeolocation() {
+  const DHAKA_LAT = 23.8103;
+  const DHAKA_LNG = 90.4125;
+  let hasResolved = false;
+
+  // Immediate dark map centering on Dhaka if no location set yet
+  if (typeof map !== "undefined" && map) {
+    if (!riderLocation.lat || !riderLocation.lng) {
+      riderLocation.lat = DHAKA_LAT;
+      riderLocation.lng = DHAKA_LNG;
+    }
+    updateUserMarker(riderLocation.lat, riderLocation.lng, riderLocation.heading || 0);
+    map.invalidateSize();
+  }
+
+  // Fallback timeout: If GPS takes too long (> 2.5s) or permission slow/denied, ensure map is centered on Dhaka without freezing
+  const fallbackTimer = setTimeout(() => {
+    if (!hasResolved) {
+      hasResolved = true;
+      console.log("[Geolocation] Quick GPS lookup timed out (2.5s) - defaulted to Dhaka coords.");
+      if (typeof map !== "undefined" && map) {
+        map.setView([DHAKA_LAT, DHAKA_LNG], 13);
+        map.invalidateSize();
+      }
+      if (!isSimulating && typeof startGPSTracking === "function") {
+        startGPSTracking();
+      }
+    }
+  }, 2500);
+
+  try {
+    if ("geolocation" in navigator && typeof navigator.geolocation.getCurrentPosition === "function") {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (hasResolved) return;
+          hasResolved = true;
+          clearTimeout(fallbackTimer);
+
+          try {
+            const { latitude, longitude, speed, heading, accuracy } = pos.coords;
+            const speedKmH = speed !== null && speed >= 0 ? speed * 3.6 : 0;
+            const validHeading = heading !== null && !isNaN(heading) ? heading : (riderLocation.heading || 0);
+
+            riderLocation.lat = latitude;
+            riderLocation.lng = longitude;
+            riderLocation.speed = speedKmH;
+            riderLocation.heading = validHeading;
+            riderLocation.accuracy = accuracy || 10;
+
+            updateUserMarker(latitude, longitude, validHeading);
+            updateSpeedometerDisplay(speedKmH);
+            evaluateOverspeed(speedKmH);
+            updateCompassHeading(validHeading);
+
+            if (typeof map !== "undefined" && map) {
+              map.setView([latitude, longitude], 15);
+              map.invalidateSize();
+            }
+
+            detectRoadTransition(latitude, longitude, true);
+            broadcastCurrentLocation();
+            upsertLiveRiderData();
+            evaluateConvoyDistances();
+            evaluatePoliceProximity();
+          } catch (posErr) {
+            console.warn("GPS position update error handled:", posErr);
+          }
+
+          if (!isSimulating && typeof startGPSTracking === "function") {
+            startGPSTracking();
+          }
+        },
+        (err) => {
+          if (hasResolved) return;
+          hasResolved = true;
+          clearTimeout(fallbackTimer);
+          console.warn("GPS permission slow, denied, or error:", err.message);
+
+          if (typeof map !== "undefined" && map) {
+            map.setView([DHAKA_LAT, DHAKA_LNG], 13);
+            map.invalidateSize();
+          }
+
+          if (!isSimulating && typeof startGPSTracking === "function") {
+            startGPSTracking();
+          }
+        },
+        { enableHighAccuracy: true, timeout: 2500, maximumAge: 5000 }
+      );
+    } else {
+      if (hasResolved) return;
+      hasResolved = true;
+      clearTimeout(fallbackTimer);
+      if (!isSimulating && typeof startGPSTracking === "function") {
+        startGPSTracking();
+      }
+    }
+  } catch (geoCatch) {
+    if (!hasResolved) {
+      hasResolved = true;
+      clearTimeout(fallbackTimer);
+      console.warn("Geolocation try/catch captured exception:", geoCatch);
+      if (typeof map !== "undefined" && map) {
+        map.setView([DHAKA_LAT, DHAKA_LNG], 13);
+        map.invalidateSize();
+      }
+      if (!isSimulating && typeof startGPSTracking === "function") {
+        startGPSTracking();
+      }
+    }
+  }
+}
+
 function startGPSTracking() {
   if (isSimulating) return;
 
@@ -2173,7 +2414,11 @@ function applySessionUI() {
   joinSupabaseRoom(currentSession.roomCode);
 
   if (!isSimulating) {
-    startGPSTracking();
+    if (typeof requestQuickGeolocation === "function") {
+      requestQuickGeolocation();
+    } else {
+      startGPSTracking();
+    }
   }
 }
 
@@ -2345,21 +2590,20 @@ function initApp() {
     });
   }
 
+  const startRidingBtn = document.getElementById("startRidingBtn");
+  if (startRidingBtn) {
+    startRidingBtn.addEventListener("click", (e) => {
+      window.submitOnboarding(e);
+    });
+    startRidingBtn.addEventListener("touchend", (e) => {
+      e.preventDefault();
+      window.submitOnboarding(e);
+    }, { passive: false });
+  }
+
   if (onboardingForm) {
     onboardingForm.addEventListener("submit", (e) => {
-      e.preventDefault();
-      playSound("engine");
-
-      const name = riderNameInput ? riderNameInput.value.trim() : "";
-      const code = roomCodeInput ? roomCodeInput.value.trim().toUpperCase() : "";
-      const isLeader = isLeaderCheckbox ? isLeaderCheckbox.checked : false;
-
-      if (!name || !code) {
-        alert("Please enter a rider name and tour room code.");
-        return;
-      }
-
-      saveSession(name, code, isLeader);
+      window.submitOnboarding(e);
     });
   }
 
