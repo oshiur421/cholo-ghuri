@@ -135,8 +135,15 @@
       }
     };
 
+    var lastGroupDrawerToggleMs = 0;
     window.toggleGroupDrawer = function(forceOpen) {
       try {
+        var now = Date.now();
+        if (forceOpen === undefined && (now - lastGroupDrawerToggleMs) < 250) {
+          return;
+        }
+        lastGroupDrawerToggleMs = now;
+
         var drawer = document.getElementById("convoyDrawer") || 
                      document.getElementById("groupDrawer") || 
                      document.getElementById("ridersDrawer");
@@ -178,6 +185,30 @@
       }
     };
     window.toggleRidersDrawer = window.toggleGroupDrawer;
+
+    // Universal Touch & Click Event Binding for mobile phones and desktop
+    function setupGroupButtonTriggers() {
+      var groupBtns = document.querySelectorAll('#topRidersCountBtn, #topRightGroupBtn, #openRidersDrawerBtn, .group-trigger-btn');
+      groupBtns.forEach(function(btn) {
+        if (!btn) return;
+        btn.style.pointerEvents = 'auto';
+        btn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          if (typeof window.toggleGroupDrawer === 'function') window.toggleGroupDrawer();
+        });
+        btn.addEventListener('touchend', function(e) {
+          e.stopPropagation();
+          e.preventDefault();
+          if (typeof window.toggleGroupDrawer === 'function') window.toggleGroupDrawer();
+        }, { passive: false });
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', setupGroupButtonTriggers);
+    } else {
+      setupGroupButtonTriggers();
+    }
   </script>
 </head>
 <body class="bg-cyber-dark text-slate-100 flex flex-col h-screen w-screen overflow-hidden select-none">
@@ -186,11 +217,11 @@
   <div id="map" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1;" class="fixed inset-0 z-[1] w-screen h-screen"></div>
 
   <!-- ==================== TOP FLOATING HUD BAR ==================== -->
-  <header class="hud-top-bar fixed top-0 left-0 right-0 z-[1000] p-1.5 sm:p-3 pointer-events-none w-full max-w-full overflow-x-hidden">
-    <div class="hud-top-container max-w-7xl mx-auto flex flex-col gap-1.5 sm:gap-2.5 w-full">
+  <header class="hud-top-bar fixed top-0 left-0 right-0 z-[10000] p-1.5 sm:p-3 pointer-events-none w-full max-w-full overflow-x-hidden" style="pointer-events: none !important; z-index: 10000 !important;">
+    <div class="hud-top-container max-w-7xl mx-auto flex flex-col gap-1.5 sm:gap-2.5 w-full pointer-events-none" style="pointer-events: none !important;">
       
       <!-- Row 1: Left (Brand, Room, Join, Share, Sync Dot) & Right (Speed Limit & Speedometer) -->
-      <div class="hud-row-1 flex items-center justify-between gap-1.5 sm:gap-3 w-full">
+      <div class="hud-row-1 flex items-center justify-between gap-1.5 sm:gap-3 w-full pointer-events-auto" style="pointer-events: auto !important; position: relative; z-index: 10005;">
         
         <!-- Left: Logo Badge, Room Code, Join Button, Share, DB Sync Dot -->
         <div class="glass-panel-neon rounded-xl sm:rounded-2xl p-1.5 sm:px-3 sm:py-2 flex items-center gap-1.5 sm:gap-2.5 pointer-events-auto shadow-2xl flex-shrink min-w-0">
@@ -247,16 +278,16 @@
           </div>
 
           <!-- Top-Right Group Badge Button (Desktop/Tablet) -->
-          <button id="topRightGroupBtn" onclick="window.toggleGroupDrawer && window.toggleGroupDrawer()" title="Open Group Riders Drawer" class="hidden sm:flex glass-panel-neon hover:border-emerald-400 active:scale-95 rounded-xl sm:rounded-2xl px-2.5 py-1.5 sm:px-3 sm:py-2 items-center gap-1.5 border border-emerald-500/40 text-slate-200 transition-all shadow-2xl cursor-pointer pointer-events-auto flex-shrink-0 whitespace-nowrap">
+          <button id="topRightGroupBtn" onclick="window.toggleGroupDrawer && window.toggleGroupDrawer()" title="Open Group Riders Drawer" class="group-trigger-btn hidden sm:flex glass-panel-neon hover:border-emerald-400 active:scale-95 rounded-xl sm:rounded-2xl px-2.5 py-1.5 sm:px-3 sm:py-2 items-center gap-1.5 border border-emerald-500/40 text-slate-200 transition-all shadow-2xl cursor-pointer pointer-events-auto flex-shrink-0 whitespace-nowrap" style="pointer-events: auto !important; position: relative; z-index: 10010; touch-action: manipulation;">
             <span class="radar-beacon w-2 h-2 rounded-full bg-neon-green pointer-events-none"></span>
-            <span class="font-cyber font-bold text-xs uppercase tracking-wider pointer-events-none">GROUP (<span id="topRightRidersCount">1</span>)</span>
+            <span class="font-cyber font-bold text-xs uppercase tracking-wider pointer-events-none">GROUP (<span id="topRightRidersCount" class="pointer-events-none">1</span>)</span>
           </button>
         </div>
 
       </div>
 
       <!-- Row 2: Full-width slim bar showing Current Road Name badge and GROUP (X) riders button side by side -->
-      <div class="hud-row-2 flex items-center justify-between gap-1.5 sm:gap-3 w-full pointer-events-auto">
+      <div class="hud-row-2 flex items-center justify-between gap-1.5 sm:gap-3 w-full pointer-events-auto" style="pointer-events: auto !important; position: relative; z-index: 10005;">
         <!-- Current Road Name Banner -->
         <div class="glass-panel road-banner-glow rounded-xl sm:rounded-2xl px-2.5 py-1 sm:px-4 sm:py-1.5 flex items-center gap-1.5 sm:gap-2.5 border border-emerald-500/20 shadow-2xl flex-1 min-w-0">
           <div class="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-neon-green flex-shrink-0">
@@ -271,9 +302,9 @@
         </div>
 
         <!-- Group (X) Riders Drawer Button -->
-        <button id="topRidersCountBtn" onclick="window.toggleGroupDrawer && window.toggleGroupDrawer()" title="View Group Riders List & Distances" class="glass-panel-neon hover:border-emerald-400 active:scale-95 rounded-xl sm:rounded-2xl px-2.5 py-1.5 sm:px-4 sm:py-2 flex items-center gap-1.5 border border-emerald-500/40 text-slate-200 transition-all shadow-2xl cursor-pointer pointer-events-auto flex-shrink-0 whitespace-nowrap">
+        <button id="topRidersCountBtn" onclick="window.toggleGroupDrawer && window.toggleGroupDrawer()" title="View Group Riders List & Distances" class="group-trigger-btn glass-panel-neon hover:border-emerald-400 active:scale-95 rounded-xl sm:rounded-2xl px-2.5 py-1.5 sm:px-4 sm:py-2 flex items-center gap-1.5 border border-emerald-500/40 text-slate-200 transition-all shadow-2xl cursor-pointer pointer-events-auto flex-shrink-0 whitespace-nowrap" style="pointer-events: auto !important; position: relative; z-index: 10010; touch-action: manipulation;">
           <span class="radar-beacon w-2 h-2 rounded-full bg-neon-green pointer-events-none"></span>
-          <span class="font-cyber font-bold text-[10px] sm:text-xs uppercase tracking-wider pointer-events-none">GROUP (<span id="activeRidersCount">1</span>)</span>
+          <span class="font-cyber font-bold text-[10px] sm:text-xs uppercase tracking-wider pointer-events-none">GROUP (<span id="activeRidersCount" class="pointer-events-none">1</span>)</span>
           <i class="fa-solid fa-chevron-right text-[8px] sm:text-[9px] text-slate-400 pointer-events-none"></i>
         </button>
       </div>
@@ -341,9 +372,9 @@
   </div>
 
   <!-- ==================== LEFT FLOATING RIDERS BUTTON (DESKTOP) ==================== -->
-  <button id="openRidersDrawerBtn" onclick="window.toggleGroupDrawer && window.toggleGroupDrawer()" title="Open Convoy Riders List" class="hidden md:flex fixed left-4 top-28 z-[1050] glove-btn glass-panel-neon hover:scale-105 active:scale-95 rounded-2xl px-3 py-2.5 items-center gap-2 border border-emerald-500/40 text-slate-200 transition-all shadow-2xl cursor-pointer pointer-events-auto">
+  <button id="openRidersDrawerBtn" onclick="window.toggleGroupDrawer && window.toggleGroupDrawer()" title="Open Convoy Riders List" class="group-trigger-btn hidden md:flex fixed left-4 top-28 z-[1050] glove-btn glass-panel-neon hover:scale-105 active:scale-95 rounded-2xl px-3 py-2.5 items-center gap-2 border border-emerald-500/40 text-slate-200 transition-all shadow-2xl cursor-pointer pointer-events-auto" style="pointer-events: auto !important; position: fixed; z-index: 1050; touch-action: manipulation;">
     <i class="fa-solid fa-users text-neon-green text-sm pointer-events-none"></i>
-    <span class="font-cyber font-bold text-xs uppercase tracking-wider pointer-events-none">Group (<span id="drawerRidersCountBadge">1</span>)</span>
+    <span class="font-cyber font-bold text-xs uppercase tracking-wider pointer-events-none">Group (<span id="drawerRidersCountBadge" class="pointer-events-none">1</span>)</span>
   </button>
 
   <!-- ==================== MOBILE DRAWER BACKDROP OVERLAY ==================== -->

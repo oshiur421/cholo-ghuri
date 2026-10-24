@@ -106,8 +106,15 @@ window.closeGroupDrawer = function() {
   }
 };
 
+let lastGroupDrawerToggleMs = 0;
 window.toggleGroupDrawer = function(forceOpen) {
   try {
+    const now = Date.now();
+    if (forceOpen === undefined && (now - lastGroupDrawerToggleMs) < 250) {
+      return;
+    }
+    lastGroupDrawerToggleMs = now;
+
     if (typeof playSound === "function") playSound("click");
     const drawer = document.getElementById("convoyDrawer") || 
                    document.getElementById("groupDrawer") || 
@@ -152,6 +159,32 @@ window.toggleGroupDrawer = function(forceOpen) {
   }
 };
 window.toggleRidersDrawer = window.toggleGroupDrawer;
+
+// Universal Touch & Click Event Binding for mobile phones and desktop
+function setupGroupButtonsTouchAndClick() {
+  const groupBtns = document.querySelectorAll('#topRidersCountBtn, #topRightGroupBtn, #openRidersDrawerBtn, .group-trigger-btn');
+  groupBtns.forEach(btn => {
+    if (!btn || btn.dataset.touchBound === "true") return;
+    btn.dataset.touchBound = "true";
+    btn.style.pointerEvents = 'auto';
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (typeof window.toggleGroupDrawer === 'function') window.toggleGroupDrawer();
+    });
+    btn.addEventListener('touchend', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (typeof window.toggleGroupDrawer === 'function') window.toggleGroupDrawer();
+    }, { passive: false });
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  setupGroupButtonsTouchAndClick();
+});
+if (document.readyState !== 'loading') {
+  setupGroupButtonsTouchAndClick();
+}
 
 window.copyInviteLink = function() {
   try {
@@ -2336,18 +2369,8 @@ function initApp() {
     });
   }
 
-  // Left Drawer Toggles
-  const toggleDrawer = (e) => {
-    if (e && typeof e.stopPropagation === "function") e.stopPropagation();
-    if (typeof window.toggleGroupDrawer === "function") {
-      window.toggleGroupDrawer();
-    }
-  };
-
-  const topRightGroupBtn = document.getElementById("topRightGroupBtn");
-  if (topRightGroupBtn) topRightGroupBtn.addEventListener("click", toggleDrawer);
-  if (openRidersDrawerBtn) openRidersDrawerBtn.addEventListener("click", toggleDrawer);
-  if (topRidersCountBtn) topRidersCountBtn.addEventListener("click", toggleDrawer);
+  // Left Drawer Toggles - ensure universal touch & click binding
+  setupGroupButtonsTouchAndClick();
   if (closeRidersDrawerBtn) {
     closeRidersDrawerBtn.addEventListener("click", (e) => {
       if (e && typeof e.stopPropagation === "function") e.stopPropagation();

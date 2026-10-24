@@ -275,6 +275,48 @@ body {
   pointer-events: auto !important;
 }
 
+/* ==================== TOP HUD POINTER-EVENTS & Z-INDEX ==================== */
+.hud-top-bar {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  z-index: 10000 !important;
+  pointer-events: none !important;
+}
+
+.hud-top-container {
+  pointer-events: none !important;
+}
+
+.hud-row-1,
+.hud-row-2 {
+  pointer-events: auto !important;
+  position: relative !important;
+  z-index: 10005 !important;
+}
+
+#topRidersCountBtn,
+#topRightGroupBtn,
+#openRidersDrawerBtn,
+.group-trigger-btn {
+  pointer-events: auto !important;
+  position: relative !important;
+  z-index: 10010 !important;
+  touch-action: manipulation !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+#topRidersCountBtn *,
+#topRightGroupBtn *,
+#openRidersDrawerBtn *,
+.group-trigger-btn * {
+  pointer-events: none !important;
+}
+
 #openRidersDrawerBtn {
   position: fixed !important;
   z-index: 1050 !important;
@@ -560,6 +602,9 @@ body {
     align-items: center;
     justify-content: space-between;
     gap: 6px;
+    pointer-events: auto !important;
+    position: relative !important;
+    z-index: 10005 !important;
   }
   .speed-limit-sign {
     width: 42px;
@@ -819,6 +864,12 @@ body {
   -webkit-backdrop-filter: blur(4px);
   z-index: 99990;
   transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+#drawerBackdrop.active,
+#drawerBackdrop:not(.hidden) {
+  pointer-events: auto !important;
 }
 
 #drawerBackdrop.hidden {
