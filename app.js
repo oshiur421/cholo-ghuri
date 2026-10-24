@@ -48,6 +48,45 @@ window.recenterCamera = function() {
   }
 };
 
+window.toggleRidersDrawer = function() {
+  try {
+    if (typeof playSound === "function") playSound("click");
+    const drawer = document.getElementById("ridersDrawer");
+    if (drawer) drawer.classList.toggle("open");
+  } catch (err) {
+    console.warn("Toggle riders drawer notice:", err);
+  }
+};
+
+window.copyInviteLink = function() {
+  try {
+    if (typeof playSound === "function") playSound("click");
+    const roomCode = (
+      (typeof currentSession !== "undefined" && currentSession && currentSession.roomCode) ||
+      (document.getElementById("roomCodeInput") ? document.getElementById("roomCodeInput").value : "") ||
+      "DHAKA101"
+    ).trim().toUpperCase();
+
+    const url = new URL(window.location.href);
+    url.searchParams.set("room", roomCode);
+    const inviteUrl = url.toString();
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(inviteUrl).then(() => {
+        if (typeof showRadarToast === "function") {
+          showRadarToast("INVITE LINK COPIED", `Convoy ${roomCode} link copied! Share with your biker crew.`);
+        }
+      }).catch(() => {
+        prompt("Copy convoy tour invite link:", inviteUrl);
+      });
+    } else {
+      prompt("Copy convoy tour invite link:", inviteUrl);
+    }
+  } catch (err) {
+    console.warn("Copy invite link notice:", err);
+  }
+};
+
 window.openReportPoliceModal = function() {
   try {
     if (typeof playSound === "function") playSound("click");
@@ -1092,18 +1131,52 @@ function evaluateOverspeed(currentSpeed) {
 // ==========================================
 // 11. SUPABASE DATABASE & REALTIME SYNC
 // ==========================================
+// DB Sync Status indicator state
+let lastSyncErrorMessage = null;
+let hasShownSyncErrorToast = false;
+let dualSyncInterval = null;
+
+function updateSyncStatusUI(isSuccess, errorMsg = "") {
+  const syncDot = document.getElementById("dbSyncDot");
+  const syncWrapper = document.getElementById("dbSyncStatusWrapper");
+
+  if (!syncDot) return;
+
+  if (isSuccess) {
+    syncDot.className = "w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(0,255,136,0.85)] transition-all duration-300";
+    if (syncWrapper) {
+      syncWrapper.title = `Supabase DB Synced (Room: ${currentSession.roomCode || "Active"})`;
+    }
+    hasShownSyncErrorToast = false;
+    lastSyncErrorMessage = null;
+  } else {
+    syncDot.className = "w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(255,30,66,0.85)] animate-pulse transition-all duration-300";
+    const msg = errorMsg || "Connection failed";
+    if (syncWrapper) {
+      syncWrapper.title = `Supabase Sync Error: ${msg}`;
+    }
+    if (msg !== lastSyncErrorMessage) {
+      console.warn("[CholoGhuri DB Sync Error]:", msg);
+      lastSyncErrorMessage = msg;
+      if (!hasShownSyncErrorToast && currentSession.roomCode && currentSession.roomCode !== "----") {
+        hasShownSyncErrorToast = true;
+        if (typeof showRadarToast === "function") {
+          showRadarToast("DB SYNC NOTICE", `Cloud sync notice: ${msg.slice(0, 45)}... Using fallback sync.`);
+        }
+      }
+    }
+  }
+}
+
 async function upsertLiveRiderData() {
   if (!sbClient || !currentSession.roomCode || !currentSession.riderId) return;
 
-  const now = Date.now();
-  if (now - lastUpsertTime < 2800) return;
-  lastUpsertTime = now;
-
+  const cleanRoom = currentSession.roomCode.trim().toUpperCase();
   try {
     const payload = {
       id: currentSession.riderId,
-      room_code: currentSession.roomCode,
-      rider_name: currentSession.riderName,
+      room_code: cleanRoom,
+      rider_name: currentSession.riderName || "Rider",
       is_leader: currentSession.isLeader,
       lat: riderLocation.lat,
       lng: riderLocation.lng,
@@ -1117,32 +1190,126 @@ async function upsertLiveRiderData() {
 
     if (error) {
       console.debug("[Supabase riders upsert note]", error.message);
+      return { success: false, error: error.message };
     }
+    return { success: true };
   } catch (err) {
     console.debug("[Supabase riders upsert error]", err);
+    return { success: false, error: err.message };
   }
 }
 
 async function fetchExistingRiders() {
   if (!sbClient || !currentSession.roomCode) return;
 
+  const cleanRoom = currentSession.roomCode.trim().toUpperCase();
   try {
     const { data: riders, error } = await sbClient
       .from("riders")
       .select("*")
-      .eq("room_code", currentSession.roomCode);
+      .eq("room_code", cleanRoom);
 
-    if (!error && riders) {
+    if (error) {
+      console.debug("[Supabase fetch riders error]", error);
+      return { success: false, error: error.message };
+    }
+
+    if (riders) {
+      const now = Date.now();
+      const activeDbIds = new Set();
+
       riders.forEach((r) => {
-        if (r.id !== currentSession.riderId && r.lat && r.lng) {
+        if (r.id === currentSession.riderId) return;
+
+        // Check if active within the last 2 minutes (120,000 ms)
+        let isActive = true;
+        if (r.updated_at) {
+          const updatedAtTime = new Date(r.updated_at).getTime();
+          if (!isNaN(updatedAtTime) && (now - updatedAtTime > 120000)) {
+            isActive = false;
+          }
+        }
+
+        if (isActive && r.lat && r.lng) {
+          activeDbIds.add(r.id);
           allConvoyRiders.set(r.id, r);
           updateRemoteRiderMarker(r);
+        } else {
+          // Stale / inactive rider older than 2 minutes: remove
+          if (allConvoyRiders.has(r.id)) {
+            allConvoyRiders.delete(r.id);
+            removeRemoteRiderMarker(r.id);
+          }
         }
       });
+
+      // Cleanup any riders in allConvoyRiders not returned in DB query (unless simulated ghost rider)
+      allConvoyRiders.forEach((val, key) => {
+        if (key !== currentSession.riderId && !key.startsWith("biker_") && !activeDbIds.has(key)) {
+          allConvoyRiders.delete(key);
+          removeRemoteRiderMarker(key);
+        }
+      });
+
       evaluateConvoyDistances();
     }
+    return { success: true };
   } catch (err) {
     console.debug("[Supabase fetch riders error]", err);
+    return { success: false, error: err.message };
+  }
+}
+
+async function runDualSyncLoop() {
+  if (!currentSession.roomCode || currentSession.roomCode === "----" || !currentSession.riderId) return;
+
+  if (!sbClient) {
+    updateSyncStatusUI(false, "Offline / Local simulation mode");
+    return;
+  }
+
+  let hasError = false;
+  let firstErrorMessage = "";
+
+  // 1. Upsert current rider's live telemetry
+  const upsertRes = await upsertLiveRiderData();
+  if (upsertRes && !upsertRes.success) {
+    hasError = true;
+    firstErrorMessage = upsertRes.error || "Upsert error";
+  }
+
+  // 2. Poll and sync all active riders for this room_code (active within last 2 minutes)
+  const ridersRes = await fetchExistingRiders();
+  if (ridersRes && !ridersRes.success) {
+    hasError = true;
+    if (!firstErrorMessage) firstErrorMessage = ridersRes.error || "Fetch riders error";
+  }
+
+  // 3. Poll and sync all police reports
+  try {
+    const { data: reports, error: policeErr } = await sbClient
+      .from("police_reports")
+      .select("*");
+
+    if (policeErr) {
+      hasError = true;
+      if (!firstErrorMessage) firstErrorMessage = policeErr.message || "Fetch police reports error";
+    } else if (reports) {
+      reports.forEach((rep) => {
+        addOrUpdatePoliceMarker(rep);
+      });
+      evaluatePoliceProximity();
+    }
+  } catch (err) {
+    hasError = true;
+    if (!firstErrorMessage) firstErrorMessage = err.message || "Police reports error";
+  }
+
+  // Update Top HUD DB Sync indicator dot
+  if (hasError) {
+    updateSyncStatusUI(false, firstErrorMessage);
+  } else {
+    updateSyncStatusUI(true);
   }
 }
 
@@ -1151,24 +1318,30 @@ function subscribeRidersTable() {
 
   if (ridersDbSubscription) {
     sbClient.removeChannel(ridersDbSubscription);
+    ridersDbSubscription = null;
   }
 
-  const channelName = `riders_db_${currentSession.roomCode}`;
-  ridersDbSubscription = sbClient
-    .channel(channelName)
-    .on(
-      "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "riders",
-        filter: `room_code=eq.${currentSession.roomCode}`
-      },
-      (payload) => {
-        handleRiderDbEvent(payload);
-      }
-    )
-    .subscribe();
+  const cleanRoom = currentSession.roomCode.trim().toUpperCase();
+  const channelName = `riders_db_${cleanRoom}`;
+  try {
+    ridersDbSubscription = sbClient
+      .channel(channelName)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "riders",
+          filter: `room_code=eq.${cleanRoom}`
+        },
+        (payload) => {
+          handleRiderDbEvent(payload);
+        }
+      )
+      .subscribe();
+  } catch (err) {
+    console.debug("[subscribeRidersTable error]", err);
+  }
 }
 
 function handleRiderDbEvent(payload) {
@@ -1193,84 +1366,100 @@ function handleRiderDbEvent(payload) {
 }
 
 function joinSupabaseRoom(roomCode) {
+  const cleanRoom = (roomCode || currentSession.roomCode || "").trim().toUpperCase();
+  currentSession.roomCode = cleanRoom;
+
   if (!sbClient) {
-    console.warn("Operating in local simulation mode.");
+    console.warn("Operating in local simulation mode (Supabase not connected).");
+    updateSyncStatusUI(false, "Offline / Local simulation mode");
     evaluateConvoyDistances();
     return;
   }
 
+  // Initial immediate queries
   fetchExistingRiders();
   subscribeRidersTable();
   fetchPoliceReports();
   subscribePoliceReports();
 
+  // Setup Realtime Broadcast channel: room_${cleanRoom}
   if (realtimeChannel) {
     sbClient.removeChannel(realtimeChannel);
+    realtimeChannel = null;
   }
 
-  const broadcastChannelName = `convoy_broadcast_${roomCode.toUpperCase()}`;
-  realtimeChannel = sbClient.channel(broadcastChannelName, {
-    config: { presence: { key: currentSession.riderId } }
-  });
-
-  realtimeChannel
-    .on("presence", { event: "sync" }, () => {
-      const state = realtimeChannel.presenceState();
-      Object.keys(state).forEach((key) => {
-        const presences = state[key];
-        if (presences && presences[0]) {
-          const rider = presences[0];
-          if (rider.id !== currentSession.riderId && rider.lat && rider.lng) {
-            allConvoyRiders.set(rider.id, rider);
-            updateRemoteRiderMarker(rider);
-          }
-        }
-      });
-      evaluateConvoyDistances();
-    })
-    .on("presence", { event: "join" }, ({ newPresences }) => {
-      if (newPresences && newPresences[0]) {
-        const rider = newPresences[0];
-        if (rider.id !== currentSession.riderId) {
-          allConvoyRiders.set(rider.id, rider);
-          showRadarToast("CONVOY SQUAD", `🏍️ ${rider.rider_name || "Biker"} joined convoy!`);
-          playSound("join");
-          if (rider.lat && rider.lng) {
-            updateRemoteRiderMarker(rider);
-          }
-          evaluateConvoyDistances();
-        }
-      }
-    })
-    .on("presence", { event: "leave" }, ({ leftPresences }) => {
-      if (leftPresences && leftPresences[0]) {
-        const rider = leftPresences[0];
-        allConvoyRiders.delete(rider.id);
-        removeRemoteRiderMarker(rider.id);
-        evaluateConvoyDistances();
-      }
-    })
-    .on("broadcast", { event: "location_update" }, ({ payload }) => {
-      if (payload && payload.id !== currentSession.riderId) {
-        allConvoyRiders.set(payload.id, payload);
-        updateRemoteRiderMarker(payload);
-        evaluateConvoyDistances();
-      }
-    })
-    .on("broadcast", { event: "police_alert" }, ({ payload }) => {
-      if (payload) {
-        addOrUpdatePoliceMarker(payload);
-        evaluatePoliceProximity();
-      }
-    })
-    .subscribe(async (status) => {
-      if (status === "SUBSCRIBED") {
-        await broadcastCurrentLocation(true);
-      }
+  const broadcastChannelName = `room_${cleanRoom}`;
+  try {
+    realtimeChannel = sbClient.channel(broadcastChannelName, {
+      config: { presence: { key: currentSession.riderId } }
     });
 
+    realtimeChannel
+      .on("presence", { event: "sync" }, () => {
+        const state = realtimeChannel.presenceState();
+        Object.keys(state).forEach((key) => {
+          const presences = state[key];
+          if (presences && presences[0]) {
+            const rider = presences[0];
+            if (rider.id !== currentSession.riderId && rider.lat && rider.lng) {
+              allConvoyRiders.set(rider.id, rider);
+              updateRemoteRiderMarker(rider);
+            }
+          }
+        });
+        evaluateConvoyDistances();
+      })
+      .on("presence", { event: "join" }, ({ newPresences }) => {
+        if (newPresences && newPresences[0]) {
+          const rider = newPresences[0];
+          if (rider.id !== currentSession.riderId) {
+            allConvoyRiders.set(rider.id, rider);
+            showRadarToast("CONVOY SQUAD", `🏍️ ${rider.rider_name || "Biker"} joined convoy!`);
+            playSound("join");
+            if (rider.lat && rider.lng) {
+              updateRemoteRiderMarker(rider);
+            }
+            evaluateConvoyDistances();
+          }
+        }
+      })
+      .on("presence", { event: "leave" }, ({ leftPresences }) => {
+        if (leftPresences && leftPresences[0]) {
+          const rider = leftPresences[0];
+          allConvoyRiders.delete(rider.id);
+          removeRemoteRiderMarker(rider.id);
+          evaluateConvoyDistances();
+        }
+      })
+      .on("broadcast", { event: "location_update" }, ({ payload }) => {
+        if (payload && payload.id !== currentSession.riderId) {
+          allConvoyRiders.set(payload.id, payload);
+          updateRemoteRiderMarker(payload);
+          evaluateConvoyDistances();
+        }
+      })
+      .on("broadcast", { event: "police_alert" }, ({ payload }) => {
+        if (payload) {
+          addOrUpdatePoliceMarker(payload);
+          evaluatePoliceProximity();
+        }
+      })
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await broadcastCurrentLocation(true);
+        }
+      });
+  } catch (chanErr) {
+    console.debug("[Realtime channel subscription note]", chanErr);
+  }
+
+  // Fast 3-second Dual Sync polling loop
+  if (dualSyncInterval) clearInterval(dualSyncInterval);
   if (upsertInterval) clearInterval(upsertInterval);
-  upsertInterval = setInterval(upsertLiveRiderData, 3000);
+
+  setTimeout(runDualSyncLoop, 200);
+  dualSyncInterval = setInterval(runDualSyncLoop, 3000);
+  upsertInterval = dualSyncInterval;
 }
 
 async function broadcastCurrentLocation(updatePresence = false) {
@@ -1705,7 +1894,7 @@ function updateRidersCount() {
   const topCountEl = document.getElementById("activeRidersCount");
   const badgeCountEl = document.getElementById("drawerRidersCountBadge");
 
-  if (topCountEl) topCountEl.textContent = `${total} ${total === 1 ? "Rider" : "Riders"}`;
+  if (topCountEl) topCountEl.textContent = `${total}`;
   if (badgeCountEl) badgeCountEl.textContent = `${total}`;
 }
 
@@ -1744,6 +1933,7 @@ function loadSavedSession() {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && parsed.riderName && parsed.roomCode && parsed.roomCode !== "----") {
+        parsed.roomCode = parsed.roomCode.trim().toUpperCase();
         currentSession = parsed;
         return true;
       }
@@ -1766,10 +1956,16 @@ function clearSession() {
     localStorage.removeItem(SESSION_STORAGE_KEY);
   } catch (e) {}
 
+  if (dualSyncInterval) {
+    clearInterval(dualSyncInterval);
+    dualSyncInterval = null;
+  }
   if (upsertInterval) {
     clearInterval(upsertInterval);
     upsertInterval = null;
   }
+
+  updateSyncStatusUI(false, "Disconnected");
 
   if (realtimeChannel && sbClient) {
     sbClient.removeChannel(realtimeChannel);
@@ -1972,12 +2168,17 @@ function initApp() {
     });
   }
 
+  const topShareRoomBtn = document.getElementById("topShareRoomBtn");
+  if (topShareRoomBtn) {
+    topShareRoomBtn.addEventListener("click", () => {
+      window.copyInviteLink();
+    });
+  }
+
   if (roomCodeBadgeBtn) {
     roomCodeBadgeBtn.addEventListener("click", () => {
-      playSound("click");
-      if (currentSession.roomCode && currentSession.roomCode !== "----" && navigator.clipboard) {
-        navigator.clipboard.writeText(currentSession.roomCode);
-        showRadarToast("ROOM CODE COPIED", `Code ${currentSession.roomCode} copied to clipboard! Share with your biker crew.`);
+      if (currentSession.roomCode && currentSession.roomCode !== "----") {
+        window.copyInviteLink();
       } else {
         window.openJoinModal();
       }
@@ -2273,10 +2474,22 @@ function initApp() {
     console.warn("Leaflet Map init error handled:", err);
   }
 
-  // 4. Check Existing Session & Initialize
+  // 4. Check URL Invite (?room=...) & Existing Session & Initialize
   try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomParam = urlParams.get("room") || urlParams.get("room_code");
     const hasExistingSession = loadSavedSession();
-    if (hasExistingSession && currentSession.roomCode && currentSession.roomCode !== "----" && currentSession.riderName) {
+
+    if (roomParam) {
+      const cleanParam = roomParam.trim().toUpperCase();
+      console.log("Tour room invite parameter detected from URL:", cleanParam);
+      if (roomCodeInput) roomCodeInput.value = cleanParam;
+      if (hasExistingSession && currentSession.riderName) {
+        if (riderNameInput) riderNameInput.value = currentSession.riderName;
+      }
+      window.openJoinModal();
+      showRadarToast("CONVOY INVITE DETECTED", `Room ${cleanParam} pre-filled! Enter your name & hit Start Riding.`);
+    } else if (hasExistingSession && currentSession.roomCode && currentSession.roomCode !== "----" && currentSession.riderName) {
       console.log("Restoring active biker session:", currentSession);
       if (riderNameInput) riderNameInput.value = currentSession.riderName;
       if (roomCodeInput) roomCodeInput.value = currentSession.roomCode;
@@ -2288,9 +2501,8 @@ function initApp() {
       currentSession.riderName = "";
       const activeRoomCodeEl = document.getElementById("activeRoomCode");
       if (activeRoomCodeEl) activeRoomCodeEl.textContent = "----";
+      window.openJoinModal();
     }
-    // Explicitly guarantee Onboarding Modal is visible on startup
-    window.openJoinModal();
   } catch (err) {
     console.warn("Session loading error handled:", err);
     window.openJoinModal();

@@ -76,71 +76,88 @@
   <div id="map" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1;" class="fixed inset-0 z-[1] w-screen h-screen"></div>
 
   <!-- ==================== TOP FLOATING HUD BAR ==================== -->
-  <header class="hud-top-bar fixed top-0 left-0 right-0 z-[1000] p-2 sm:p-4 pointer-events-none">
-    <div class="max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-4">
+  <header class="hud-top-bar fixed top-0 left-0 right-0 z-[1000] p-1.5 sm:p-3 pointer-events-none w-full max-w-full overflow-x-hidden">
+    <div class="hud-top-container max-w-7xl mx-auto flex flex-col gap-1.5 sm:gap-2.5 w-full">
       
-      <!-- Left: Logo Badge, Room Code, Riders Count -->
-      <div class="glass-panel-neon rounded-2xl p-2 sm:px-4 sm:py-2.5 flex items-center gap-2 sm:gap-3 pointer-events-auto shadow-2xl">
-        <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-black/60 border border-emerald-500/40 flex items-center justify-center text-neon-green shadow-inner">
-          <i class="fa-solid fa-motorcycle text-lg sm:text-xl"></i>
-        </div>
-        <div class="flex flex-col">
-          <div class="flex items-center gap-1.5">
-            <span class="font-cyber font-bold tracking-wider text-xs sm:text-sm text-slate-100">CHOLO GHURI</span>
-            <span id="captainBadge" class="hidden px-1.5 py-0.2 text-[9px] font-bold rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
-              <i class="fa-solid fa-crown text-[8px] mr-0.5"></i>CAPTAIN
-            </span>
+      <!-- Row 1: Left (Brand, Room, Join, Share, Sync Dot) & Right (Speed Limit & Speedometer) -->
+      <div class="hud-row-1 flex items-center justify-between gap-1.5 sm:gap-3 w-full">
+        
+        <!-- Left: Logo Badge, Room Code, Join Button, Share, DB Sync Dot -->
+        <div class="glass-panel-neon rounded-xl sm:rounded-2xl p-1.5 sm:px-3 sm:py-2 flex items-center gap-1.5 sm:gap-2.5 pointer-events-auto shadow-2xl flex-shrink min-w-0">
+          <div class="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-black/60 border border-emerald-500/40 flex items-center justify-center text-neon-green shadow-inner flex-shrink-0">
+            <i class="fa-solid fa-motorcycle text-xs sm:text-base"></i>
           </div>
-          <div class="flex items-center gap-2 text-[11px] sm:text-xs">
-            <button id="roomCodeBadgeBtn" onclick="window.openJoinModal()" title="Click to copy tour room code" class="font-hud font-bold text-neon-green tracking-wider hover:underline flex items-center gap-1">
-              <span id="activeRoomCode">----</span>
-              <i class="fa-regular fa-copy text-[10px] text-slate-400"></i>
-            </button>
-            <button id="topJoinRoomBtn" onclick="window.openJoinModal()" title="Join Convoy or Change Room" class="px-2.5 py-1 rounded bg-emerald-500/20 hover:bg-emerald-500/40 text-neon-green border border-emerald-500/60 text-xs font-cyber font-bold tracking-wider uppercase transition-all flex items-center gap-1 shadow-sm cursor-pointer pointer-events-auto">
-              <i class="fa-solid fa-plus text-[10px]"></i>
-              <span>JOIN / ROOM</span>
-            </button>
-            <span class="text-slate-600">•</span>
-            <button id="topRidersCountBtn" title="View Group Riders List & Distances" class="flex items-center gap-1.5 text-slate-300 hover:text-white transition-colors cursor-pointer">
-              <span class="radar-beacon w-2 h-2 rounded-full bg-neon-green"></span>
-              <span id="activeRidersCount" class="font-semibold whitespace-nowrap">1 Rider</span>
-              <i class="fa-solid fa-chevron-right text-[9px] text-slate-500"></i>
-            </button>
+          <div class="flex flex-col min-w-0">
+            <div class="flex items-center gap-1">
+              <span class="font-cyber font-bold tracking-wider text-[11px] sm:text-sm text-slate-100 truncate">CHOLO GHURI</span>
+              <span id="captainBadge" class="hidden px-1 py-0.2 text-[8px] sm:text-[9px] font-bold rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 whitespace-nowrap">
+                <i class="fa-solid fa-crown text-[7px] mr-0.5"></i>CAPTAIN
+              </span>
+            </div>
+            <div class="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs">
+              <button id="roomCodeBadgeBtn" title="Click to copy tour room code" class="font-hud font-bold text-neon-green tracking-wider hover:underline flex items-center gap-0.5 cursor-pointer">
+                <span id="activeRoomCode">----</span>
+                <i class="fa-regular fa-copy text-[8px] sm:text-[9px] text-slate-400"></i>
+              </button>
+              <button id="topJoinRoomBtn" onclick="window.openJoinModal()" title="Join Convoy or Change Room" class="px-1.5 sm:px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/40 text-neon-green border border-emerald-500/60 text-[9px] sm:text-[11px] font-cyber font-bold tracking-wider uppercase transition-all flex items-center gap-0.5 cursor-pointer pointer-events-auto whitespace-nowrap">
+                <i class="fa-solid fa-plus text-[8px]"></i>
+                <span>JOIN</span>
+              </button>
+              <button id="topShareRoomBtn" onclick="window.copyInviteLink && window.copyInviteLink()" title="Copy Tour Invite Link" class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-600 hover:border-cyan-400 text-[9px] sm:text-[10px] font-cyber font-bold flex items-center gap-1 cursor-pointer pointer-events-auto transition-colors whitespace-nowrap">
+                <i class="fa-solid fa-share-nodes text-[8px]"></i>
+                <span class="hidden sm:inline">INVITE</span>
+              </button>
+              <!-- DB Sync Status Dot -->
+              <span id="dbSyncStatusWrapper" class="flex items-center gap-1 pl-0.5" title="DB Sync: Connecting...">
+                <span id="dbSyncDot" class="w-2 h-2 rounded-full bg-slate-500 transition-colors duration-300"></span>
+              </span>
+            </div>
           </div>
         </div>
+
+        <!-- Right: Traffic Speed Limit Sign & Digital Speedometer -->
+        <div class="glass-panel rounded-xl sm:rounded-2xl p-1 sm:px-3 sm:py-1.5 flex items-center gap-1.5 sm:gap-3 pointer-events-auto border border-slate-700/60 shadow-2xl flex-shrink-0">
+          <!-- Circular Traffic Speed Limit Sign -->
+          <div class="flex flex-col items-center">
+            <div id="speedLimitSign" class="speed-limit-sign" title="Highway Speed Limit">
+              <span id="speedLimitVal" class="speed-limit-number">80</span>
+              <span class="speed-limit-unit">LIMIT</span>
+            </div>
+          </div>
+
+          <!-- Digital Speedometer -->
+          <div class="flex flex-col items-end pr-0.5 sm:pr-1">
+            <div class="flex items-baseline gap-0.5">
+              <span id="liveSpeedDisplay" class="font-hud font-black text-xl sm:text-3xl text-neon-green speedo-glow leading-none">00</span>
+              <span class="font-cyber font-bold text-[8px] sm:text-xs text-slate-400">KM/H</span>
+            </div>
+            <span id="speedStatusLabel" class="text-[8px] sm:text-[9px] font-semibold text-emerald-400 uppercase tracking-wider">Cruising</span>
+          </div>
+        </div>
+
       </div>
 
-      <!-- Center: Current Road Name Banner -->
-      <div class="glass-panel road-banner-glow rounded-2xl px-3 py-1.5 sm:px-6 sm:py-2.5 flex items-center gap-2 sm:gap-3 pointer-events-auto border border-emerald-500/20 shadow-2xl">
-        <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-neon-green">
-          <i id="compassIcon" class="fa-solid fa-location-arrow text-xs sm:text-sm transition-transform duration-300"></i>
-        </div>
-        <div class="flex flex-col text-center">
-          <span class="text-[9px] sm:text-[10px] uppercase tracking-widest text-emerald-400/80 font-bold">CURRENT HIGHWAY</span>
-          <div id="currentRoadBanner" class="hud-road-text font-cyber font-bold text-xs sm:text-base text-slate-100 truncate max-w-[130px] sm:max-w-[260px] md:max-w-sm">
-            Detecting Road...
+      <!-- Row 2: Full-width slim bar showing Current Road Name badge and GROUP (X) riders button side by side -->
+      <div class="hud-row-2 flex items-center justify-between gap-1.5 sm:gap-3 w-full pointer-events-auto">
+        <!-- Current Road Name Banner -->
+        <div class="glass-panel road-banner-glow rounded-xl sm:rounded-2xl px-2.5 py-1 sm:px-4 sm:py-1.5 flex items-center gap-1.5 sm:gap-2.5 border border-emerald-500/20 shadow-2xl flex-1 min-w-0">
+          <div class="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-neon-green flex-shrink-0">
+            <i id="compassIcon" class="fa-solid fa-location-arrow text-[10px] sm:text-xs transition-transform duration-300"></i>
           </div>
-        </div>
-      </div>
-
-      <!-- Right: Traffic Speed Limit Sign & Digital Speedometer -->
-      <div class="glass-panel rounded-2xl p-1.5 sm:px-3 sm:py-2 flex items-center gap-2 sm:gap-4 pointer-events-auto border border-slate-700/60 shadow-2xl">
-        <!-- Circular Traffic Speed Limit Sign -->
-        <div class="flex flex-col items-center">
-          <div id="speedLimitSign" class="speed-limit-sign" title="Highway Speed Limit">
-            <span id="speedLimitVal" class="speed-limit-number">80</span>
-            <span class="speed-limit-unit">LIMIT</span>
+          <div class="flex flex-col min-w-0 text-left">
+            <span class="text-[8px] sm:text-[9px] uppercase tracking-widest text-emerald-400/80 font-bold leading-tight">CURRENT ROAD</span>
+            <div id="currentRoadBanner" class="hud-road-text font-cyber font-bold text-[11px] sm:text-sm text-slate-100 truncate">
+              Detecting Road...
+            </div>
           </div>
         </div>
 
-        <!-- Digital Speedometer -->
-        <div class="flex flex-col items-end pr-1 sm:pr-2">
-          <div class="flex items-baseline gap-1">
-            <span id="liveSpeedDisplay" class="font-hud font-black text-2xl sm:text-4xl text-neon-green speedo-glow leading-none">00</span>
-            <span class="font-cyber font-bold text-[10px] sm:text-xs text-slate-400">KM/H</span>
-          </div>
-          <span id="speedStatusLabel" class="text-[9px] font-semibold text-emerald-400 uppercase tracking-wider">Cruising</span>
-        </div>
+        <!-- Group (X) Riders Drawer Button -->
+        <button id="topRidersCountBtn" onclick="window.toggleRidersDrawer && window.toggleRidersDrawer()" title="View Group Riders List & Distances" class="glass-panel-neon hover:border-emerald-400 active:scale-95 rounded-xl sm:rounded-2xl px-2.5 py-1.5 sm:px-4 sm:py-2 flex items-center gap-1.5 border border-emerald-500/40 text-slate-200 transition-all shadow-2xl cursor-pointer flex-shrink-0 whitespace-nowrap">
+          <span class="radar-beacon w-2 h-2 rounded-full bg-neon-green"></span>
+          <span class="font-cyber font-bold text-[10px] sm:text-xs uppercase tracking-wider">GROUP (<span id="activeRidersCount">1</span>)</span>
+          <i class="fa-solid fa-chevron-right text-[8px] sm:text-[9px] text-slate-400"></i>
+        </button>
       </div>
 
     </div>
@@ -205,8 +222,8 @@
     </div>
   </div>
 
-  <!-- ==================== LEFT FLOATING RIDERS BUTTON ==================== -->
-  <button id="openRidersDrawerBtn" title="Open Convoy Riders List" class="fixed left-2 sm:left-4 top-24 sm:top-28 z-[1050] glove-btn glass-panel-neon hover:scale-105 active:scale-95 rounded-2xl px-3 py-2.5 flex items-center gap-2 border border-emerald-500/40 text-slate-200 transition-all shadow-2xl cursor-pointer">
+  <!-- ==================== LEFT FLOATING RIDERS BUTTON (DESKTOP) ==================== -->
+  <button id="openRidersDrawerBtn" onclick="window.toggleRidersDrawer && window.toggleRidersDrawer()" title="Open Convoy Riders List" class="hidden md:flex fixed left-4 top-28 z-[1050] glove-btn glass-panel-neon hover:scale-105 active:scale-95 rounded-2xl px-3 py-2.5 items-center gap-2 border border-emerald-500/40 text-slate-200 transition-all shadow-2xl cursor-pointer">
     <i class="fa-solid fa-users text-neon-green text-sm"></i>
     <span class="font-cyber font-bold text-xs uppercase tracking-wider">Group (<span id="drawerRidersCountBadge">1</span>)</span>
   </button>
@@ -413,11 +430,11 @@
   </div>
 
   <!-- ==================== BOTTOM GLOVE-FRIENDLY HUD CONTROL BAR ==================== -->
-  <div id="bottomControlBar" class="hud-bottom-bar" style="position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; gap: 12px; align-items: center; background: rgba(7,10,15,0.9); padding: 10px 16px; border-radius: 16px; border: 1px solid #00ff88;">
+  <div id="bottomControlBar" class="hud-bottom-bar">
     
     <!-- Left Glove Button: Recenter Map -->
-    <button id="recenterBtn" onclick="window.recenterCamera && window.recenterCamera()" title="Recenter Camera on Rider" class="glove-btn glass-panel hover:glass-panel-neon active:scale-95 rounded-2xl px-3 sm:px-5 py-3 flex items-center gap-2 border border-slate-700/80 hover:border-emerald-500/60 transition-all shadow-xl cursor-pointer pointer-events-auto">
-      <div class="w-8 h-8 rounded-xl bg-slate-800/80 border border-slate-700 flex items-center justify-center text-neon-green text-sm">
+    <button id="recenterBtn" onclick="window.recenterCamera && window.recenterCamera()" title="Recenter Camera on Rider" class="glove-btn glass-panel hover:glass-panel-neon active:scale-95 rounded-xl sm:rounded-2xl px-2.5 sm:px-4 py-2 sm:py-3 flex items-center justify-center gap-1 sm:gap-2 border border-slate-700/80 hover:border-emerald-500/60 transition-all shadow-xl cursor-pointer pointer-events-auto flex-1 sm:flex-initial">
+      <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-slate-800/80 border border-slate-700 flex items-center justify-center text-neon-green text-xs sm:text-sm flex-shrink-0">
         <i id="lockTargetIcon" class="fa-solid fa-crosshairs"></i>
       </div>
       <div class="hidden sm:flex flex-col text-left">
@@ -427,29 +444,29 @@
     </button>
 
     <!-- Center Massive Glove Button: Report Police Checkpost -->
-    <button id="reportPoliceBtn" onclick="window.openReportPoliceModal && window.openReportPoliceModal()" title="Report Police Checkpost to Convoy" class="police-btn glove-btn active:scale-95 rounded-2xl sm:rounded-3xl px-4 sm:px-8 py-3.5 flex items-center justify-center gap-2.5 sm:gap-3 transition-all shadow-2xl cursor-pointer pointer-events-auto">
-      <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-950/80 border border-red-500/40 flex items-center justify-center text-red-500 text-lg shadow-inner">
+    <button id="reportPoliceBtn" onclick="window.openReportPoliceModal && window.openReportPoliceModal()" title="Report Police Checkpost to Convoy" class="police-btn glove-btn active:scale-95 rounded-xl sm:rounded-3xl px-2.5 sm:px-6 py-2 sm:py-3.5 flex items-center justify-center gap-1.5 sm:gap-2.5 transition-all shadow-2xl cursor-pointer pointer-events-auto flex-[2] sm:flex-initial min-w-0">
+      <div class="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-slate-950/80 border border-red-500/40 flex items-center justify-center text-red-500 text-sm sm:text-base shadow-inner flex-shrink-0">
         <i class="fa-solid fa-shield-halved animate-pulse"></i>
       </div>
-      <div class="flex flex-col text-left">
-        <span class="font-cyber font-black text-xs sm:text-sm tracking-wider uppercase text-white drop-shadow">
-          REPORT POLICE CHECKPOST
+      <div class="flex flex-col text-left min-w-0">
+        <span class="font-cyber font-black text-[10px] sm:text-xs tracking-wider uppercase text-white drop-shadow truncate">
+          REPORT POLICE
         </span>
-        <span class="text-[9px] sm:text-[10px] text-cyan-300 font-semibold tracking-wide">
+        <span class="text-[8px] sm:text-[9px] text-cyan-300 font-semibold tracking-wide hidden sm:block">
           Broadcast Radar Alert
         </span>
       </div>
     </button>
 
     <!-- Sim Mode Dev Button -->
-    <button id="simModeToggleBtn" onclick="window.toggleSimDevPanel && window.toggleSimDevPanel()" title="Toggle Sim Mode (Dev Tools)" class="glove-btn glass-panel hover:glass-panel-neon active:scale-95 rounded-2xl px-3 sm:px-4 py-3 flex items-center justify-center gap-1.5 border border-slate-700/80 hover:border-emerald-500/60 transition-all shadow-xl cursor-pointer pointer-events-auto">
-      <i class="fa-solid fa-sliders text-amber-400 text-sm"></i>
+    <button id="simModeToggleBtn" onclick="window.toggleSimDevPanel && window.toggleSimDevPanel()" title="Toggle Sim Mode (Dev Tools)" class="glove-btn glass-panel hover:glass-panel-neon active:scale-95 rounded-xl sm:rounded-2xl px-2 sm:px-3.5 py-2 sm:py-3 flex items-center justify-center gap-1 border border-slate-700/80 hover:border-emerald-500/60 transition-all shadow-xl cursor-pointer pointer-events-auto flex-1 sm:flex-initial">
+      <i class="fa-solid fa-sliders text-amber-400 text-xs sm:text-sm"></i>
       <span class="hidden md:inline font-cyber font-bold text-xs text-slate-300">SIM DEV</span>
     </button>
 
     <!-- Leave Tour Button -->
-    <button id="leaveTourBtn" onclick="window.leaveActiveTour && window.leaveActiveTour()" title="Leave Active Convoy Room" class="glove-btn glass-panel hover:bg-red-950/40 active:scale-95 rounded-2xl px-3 sm:px-4 py-3 flex items-center justify-center gap-1.5 border border-slate-700/80 hover:border-red-500/50 transition-all shadow-xl text-slate-300 hover:text-red-400 cursor-pointer pointer-events-auto">
-      <i class="fa-solid fa-arrow-right-from-bracket text-sm"></i>
+    <button id="leaveTourBtn" onclick="window.leaveActiveTour && window.leaveActiveTour()" title="Leave Active Convoy Room" class="glove-btn glass-panel hover:bg-red-950/40 active:scale-95 rounded-xl sm:rounded-2xl px-2 sm:px-3.5 py-2 sm:py-3 flex items-center justify-center gap-1 border border-slate-700/80 hover:border-red-500/50 transition-all shadow-xl text-slate-300 hover:text-red-400 cursor-pointer pointer-events-auto flex-1 sm:flex-initial">
+      <i class="fa-solid fa-arrow-right-from-bracket text-xs sm:text-sm"></i>
       <span class="hidden sm:inline font-cyber font-bold text-xs">EXIT</span>
     </button>
   </div>
