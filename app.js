@@ -140,6 +140,38 @@ window.leaveActiveTour = function() {
 const SUPABASE_URL = "https://iblaigoargdzrpahkbxt.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_iXppRFLUtwNngEd1m80zVw_lWS8HgMV";
 
+// Direct Supabase REST API Helper (fetch with sb_publishable key & PostgREST headers)
+async function supabaseRest(endpoint, method = "GET", body = null) {
+  const url = `https://iblaigoargdzrpahkbxt.supabase.co/rest/v1/${endpoint}`;
+  const options = {
+    method: method.toUpperCase(),
+    headers: {
+      "apikey": SUPABASE_ANON_KEY,
+      "Authorization": "Bearer " + SUPABASE_ANON_KEY,
+      "Content-Type": "application/json",
+      "Prefer": "return=representation,resolution=merge-duplicates"
+    }
+  };
+
+  if (body !== null && options.method !== "GET" && options.method !== "HEAD") {
+    options.body = typeof body === "string" ? body : JSON.stringify(body);
+  }
+
+  const res = await fetch(url, options);
+  if (!res.ok) {
+    let errBody = null;
+    try {
+      errBody = await res.json();
+    } catch (e) {}
+    const errMsg = (errBody && (errBody.message || errBody.error || errBody.details)) || `HTTP ${res.status}: ${res.statusText}`;
+    throw new Error(errMsg);
+  }
+
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+window.supabaseRest = supabaseRest;
+
 // Note: Avoid variable name collision with window.supabase from CDN
 let sbClient = null;
 try {
@@ -531,19 +563,16 @@ async function reportPoliceCheckpost() {
 }
 
 async function fetchPoliceReports() {
-  if (!sbClient) return;
-
   try {
-    const { data: reports, error } = await sbClient
-      .from("police_reports")
-      .select("*");
-
-    if (!error && reports) {
+    const reports = await supabaseRest("police_reports?select=*", "GET");
+    if (Array.isArray(reports)) {
       reports.forEach((r) => addOrUpdatePoliceMarker(r));
       evaluatePoliceProximity();
     }
+    return { success: true };
   } catch (err) {
-    console.debug("[Supabase police_reports fetch error]", err);
+    console.debug("[supabaseRest police_reports fetch error]", err);
+    return { success: false, error: err.message };
   }
 }
 
@@ -1168,8 +1197,14 @@ function updateSyncStatusUI(isSuccess, errorMsg = "") {
   }
 }
 
-async function upsertLiveRiderData() {
-  if (!sbClient || !currentSession.roomCode || !currentSession.riderId) return;
+async function upsertLiveRiderData(force = false) {
+  if (!currentSession.roomCode || currentSession.roomCode === "----" || !currentSession.riderId) return { success: true };
+
+  const now = Date.now();
+  if (!force && now - lastUpsertTime < 1200) {
+    return { success: true };
+  }
+  lastUpsertTime = now;
 
   const cleanRoom = currentSession.roomCode.trim().toUpperCase();
   try {
@@ -1177,69 +1212,43 @@ async function upsertLiveRiderData() {
       id: currentSession.riderId,
       room_code: cleanRoom,
       rider_name: currentSession.riderName || "Rider",
-      is_leader: currentSession.isLeader,
+      is_leader: Boolean(currentSession.isLeader),
       lat: riderLocation.lat,
       lng: riderLocation.lng,
-      speed: Math.round(riderLocation.speed * 10) / 10,
+      speed: Math.round((riderLocation.speed || 0) * 10) / 10,
       updated_at: new Date().toISOString()
     };
 
-    const { error } = await sbClient
-      .from("riders")
-      .upsert(payload, { onConflict: "id" });
-
-    if (error) {
-      console.debug("[Supabase riders upsert note]", error.message);
-      return { success: false, error: error.message };
-    }
+    await supabaseRest("riders?on_conflict=id", "POST", payload);
     return { success: true };
   } catch (err) {
-    console.debug("[Supabase riders upsert error]", err);
+    console.debug("[supabaseRest riders upsert error]", err);
     return { success: false, error: err.message };
   }
 }
 
 async function fetchExistingRiders() {
-  if (!sbClient || !currentSession.roomCode) return;
+  if (!currentSession.roomCode || currentSession.roomCode === "----") return { success: true };
 
-  const cleanRoom = currentSession.roomCode.trim().toUpperCase();
+  const cleanRoom = encodeURIComponent(currentSession.roomCode.trim().toUpperCase());
   try {
-    const { data: riders, error } = await sbClient
-      .from("riders")
-      .select("*")
-      .eq("room_code", cleanRoom);
+    const riders = await supabaseRest(
+      `riders?room_code=eq.${cleanRoom}&select=*&order=updated_at.desc&limit=30`,
+      "GET"
+    );
 
-    if (error) {
-      console.debug("[Supabase fetch riders error]", error);
-      return { success: false, error: error.message };
-    }
-
-    if (riders) {
-      const now = Date.now();
+    if (Array.isArray(riders)) {
       const activeDbIds = new Set();
 
       riders.forEach((r) => {
+        if (!r || !r.id) return;
         if (r.id === currentSession.riderId) return;
 
-        // Check if active within the last 2 minutes (120,000 ms)
-        let isActive = true;
-        if (r.updated_at) {
-          const updatedAtTime = new Date(r.updated_at).getTime();
-          if (!isNaN(updatedAtTime) && (now - updatedAtTime > 120000)) {
-            isActive = false;
-          }
-        }
-
-        if (isActive && r.lat && r.lng) {
+        // Render ALL rows returned directly without client clock-skew filtering
+        if (r.lat !== undefined && r.lat !== null && r.lng !== undefined && r.lng !== null) {
           activeDbIds.add(r.id);
           allConvoyRiders.set(r.id, r);
           updateRemoteRiderMarker(r);
-        } else {
-          // Stale / inactive rider older than 2 minutes: remove
-          if (allConvoyRiders.has(r.id)) {
-            allConvoyRiders.delete(r.id);
-            removeRemoteRiderMarker(r.id);
-          }
         }
       });
 
@@ -1255,7 +1264,7 @@ async function fetchExistingRiders() {
     }
     return { success: true };
   } catch (err) {
-    console.debug("[Supabase fetch riders error]", err);
+    console.debug("[supabaseRest fetch riders error]", err);
     return { success: false, error: err.message };
   }
 }
@@ -1263,46 +1272,28 @@ async function fetchExistingRiders() {
 async function runDualSyncLoop() {
   if (!currentSession.roomCode || currentSession.roomCode === "----" || !currentSession.riderId) return;
 
-  if (!sbClient) {
-    updateSyncStatusUI(false, "Offline / Local simulation mode");
-    return;
-  }
-
   let hasError = false;
   let firstErrorMessage = "";
 
-  // 1. Upsert current rider's live telemetry
-  const upsertRes = await upsertLiveRiderData();
+  // 1. Direct REST: Upsert current rider's live telemetry (POST /rest/v1/riders?on_conflict=id)
+  const upsertRes = await upsertLiveRiderData(true);
   if (upsertRes && !upsertRes.success) {
     hasError = true;
     firstErrorMessage = upsertRes.error || "Upsert error";
   }
 
-  // 2. Poll and sync all active riders for this room_code (active within last 2 minutes)
+  // 2. Direct REST: Poll and sync all active riders for this room_code (order=updated_at.desc&limit=30)
   const ridersRes = await fetchExistingRiders();
   if (ridersRes && !ridersRes.success) {
     hasError = true;
     if (!firstErrorMessage) firstErrorMessage = ridersRes.error || "Fetch riders error";
   }
 
-  // 3. Poll and sync all police reports
-  try {
-    const { data: reports, error: policeErr } = await sbClient
-      .from("police_reports")
-      .select("*");
-
-    if (policeErr) {
-      hasError = true;
-      if (!firstErrorMessage) firstErrorMessage = policeErr.message || "Fetch police reports error";
-    } else if (reports) {
-      reports.forEach((rep) => {
-        addOrUpdatePoliceMarker(rep);
-      });
-      evaluatePoliceProximity();
-    }
-  } catch (err) {
+  // 3. Direct REST: Poll and sync all active police reports (GET /rest/v1/police_reports?select=*)
+  const policeRes = await fetchPoliceReports();
+  if (policeRes && !policeRes.success) {
     hasError = true;
-    if (!firstErrorMessage) firstErrorMessage = err.message || "Police reports error";
+    if (!firstErrorMessage) firstErrorMessage = policeRes.error || "Fetch police reports error";
   }
 
   // Update Top HUD DB Sync indicator dot
@@ -1369,96 +1360,92 @@ function joinSupabaseRoom(roomCode) {
   const cleanRoom = (roomCode || currentSession.roomCode || "").trim().toUpperCase();
   currentSession.roomCode = cleanRoom;
 
-  if (!sbClient) {
-    console.warn("Operating in local simulation mode (Supabase not connected).");
-    updateSyncStatusUI(false, "Offline / Local simulation mode");
-    evaluateConvoyDistances();
-    return;
-  }
-
-  // Initial immediate queries
+  // Initial immediate queries via direct REST
   fetchExistingRiders();
-  subscribeRidersTable();
   fetchPoliceReports();
-  subscribePoliceReports();
 
-  // Setup Realtime Broadcast channel: room_${cleanRoom}
-  if (realtimeChannel) {
-    sbClient.removeChannel(realtimeChannel);
-    realtimeChannel = null;
-  }
+  if (sbClient) {
+    subscribeRidersTable();
+    subscribePoliceReports();
 
-  const broadcastChannelName = `room_${cleanRoom}`;
-  try {
-    realtimeChannel = sbClient.channel(broadcastChannelName, {
-      config: { presence: { key: currentSession.riderId } }
-    });
+    // Setup Realtime Broadcast channel: room_${cleanRoom}
+    if (realtimeChannel) {
+      sbClient.removeChannel(realtimeChannel);
+      realtimeChannel = null;
+    }
 
-    realtimeChannel
-      .on("presence", { event: "sync" }, () => {
-        const state = realtimeChannel.presenceState();
-        Object.keys(state).forEach((key) => {
-          const presences = state[key];
-          if (presences && presences[0]) {
-            const rider = presences[0];
-            if (rider.id !== currentSession.riderId && rider.lat && rider.lng) {
+    const broadcastChannelName = `room_${cleanRoom}`;
+    try {
+      realtimeChannel = sbClient.channel(broadcastChannelName, {
+        config: { presence: { key: currentSession.riderId } }
+      });
+
+      realtimeChannel
+        .on("presence", { event: "sync" }, () => {
+          const state = realtimeChannel.presenceState();
+          Object.keys(state).forEach((key) => {
+            const presences = state[key];
+            if (presences && presences[0]) {
+              const rider = presences[0];
+              if (rider.id !== currentSession.riderId && rider.lat && rider.lng) {
+                allConvoyRiders.set(rider.id, rider);
+                updateRemoteRiderMarker(rider);
+              }
+            }
+          });
+          evaluateConvoyDistances();
+        })
+        .on("presence", { event: "join" }, ({ newPresences }) => {
+          if (newPresences && newPresences[0]) {
+            const rider = newPresences[0];
+            if (rider.id !== currentSession.riderId) {
               allConvoyRiders.set(rider.id, rider);
-              updateRemoteRiderMarker(rider);
+              showRadarToast("CONVOY SQUAD", `🏍️ ${rider.rider_name || "Biker"} joined convoy!`);
+              playSound("join");
+              if (rider.lat && rider.lng) {
+                updateRemoteRiderMarker(rider);
+              }
+              evaluateConvoyDistances();
             }
           }
-        });
-        evaluateConvoyDistances();
-      })
-      .on("presence", { event: "join" }, ({ newPresences }) => {
-        if (newPresences && newPresences[0]) {
-          const rider = newPresences[0];
-          if (rider.id !== currentSession.riderId) {
-            allConvoyRiders.set(rider.id, rider);
-            showRadarToast("CONVOY SQUAD", `🏍️ ${rider.rider_name || "Biker"} joined convoy!`);
-            playSound("join");
-            if (rider.lat && rider.lng) {
-              updateRemoteRiderMarker(rider);
-            }
+        })
+        .on("presence", { event: "leave" }, ({ leftPresences }) => {
+          if (leftPresences && leftPresences[0]) {
+            const rider = leftPresences[0];
+            allConvoyRiders.delete(rider.id);
+            removeRemoteRiderMarker(rider.id);
             evaluateConvoyDistances();
           }
-        }
-      })
-      .on("presence", { event: "leave" }, ({ leftPresences }) => {
-        if (leftPresences && leftPresences[0]) {
-          const rider = leftPresences[0];
-          allConvoyRiders.delete(rider.id);
-          removeRemoteRiderMarker(rider.id);
-          evaluateConvoyDistances();
-        }
-      })
-      .on("broadcast", { event: "location_update" }, ({ payload }) => {
-        if (payload && payload.id !== currentSession.riderId) {
-          allConvoyRiders.set(payload.id, payload);
-          updateRemoteRiderMarker(payload);
-          evaluateConvoyDistances();
-        }
-      })
-      .on("broadcast", { event: "police_alert" }, ({ payload }) => {
-        if (payload) {
-          addOrUpdatePoliceMarker(payload);
-          evaluatePoliceProximity();
-        }
-      })
-      .subscribe(async (status) => {
-        if (status === "SUBSCRIBED") {
-          await broadcastCurrentLocation(true);
-        }
-      });
-  } catch (chanErr) {
-    console.debug("[Realtime channel subscription note]", chanErr);
+        })
+        .on("broadcast", { event: "location_update" }, ({ payload }) => {
+          if (payload && payload.id !== currentSession.riderId) {
+            allConvoyRiders.set(payload.id, payload);
+            updateRemoteRiderMarker(payload);
+            evaluateConvoyDistances();
+          }
+        })
+        .on("broadcast", { event: "police_alert" }, ({ payload }) => {
+          if (payload) {
+            addOrUpdatePoliceMarker(payload);
+            evaluatePoliceProximity();
+          }
+        })
+        .subscribe(async (status) => {
+          if (status === "SUBSCRIBED") {
+            await broadcastCurrentLocation(true);
+          }
+        });
+    } catch (chanErr) {
+      console.debug("[Realtime channel subscription note]", chanErr);
+    }
   }
 
-  // Fast 3-second Dual Sync polling loop
+  // Fast 2.5-second Dual Sync polling loop
   if (dualSyncInterval) clearInterval(dualSyncInterval);
   if (upsertInterval) clearInterval(upsertInterval);
 
   setTimeout(runDualSyncLoop, 200);
-  dualSyncInterval = setInterval(runDualSyncLoop, 3000);
+  dualSyncInterval = setInterval(runDualSyncLoop, 2500);
   upsertInterval = dualSyncInterval;
 }
 
@@ -1905,23 +1892,37 @@ function generateRoomCode() {
 }
 
 function generateUUID() {
-  if (window.crypto && crypto.randomUUID) {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
   }
   return "id_" + Math.random().toString(36).substring(2, 11) + "_" + Date.now();
 }
 
 function saveSession(riderName, roomCode, isLeader) {
-  const riderId = currentSession.riderId || generateUUID();
+  const cleanName = (riderName || "").trim();
+  const cleanCode = (roomCode || "").trim().toUpperCase();
+
+  // Fix Rider ID Collision: Generate a brand new UUID whenever clicking "START RIDING" with a different Rider Name or Room Code
+  let riderId = currentSession.riderId;
+  const isDifferent = !riderId ||
+    !currentSession.riderName ||
+    !currentSession.roomCode ||
+    currentSession.riderName.trim().toLowerCase() !== cleanName.toLowerCase() ||
+    currentSession.roomCode.trim().toUpperCase() !== cleanCode;
+
+  if (isDifferent) {
+    riderId = generateUUID();
+  }
+
   currentSession = {
     riderId,
-    riderName: riderName.trim(),
-    roomCode: roomCode.trim().toUpperCase(),
+    riderName: cleanName,
+    roomCode: cleanCode,
     isLeader: Boolean(isLeader)
   };
 
   try {
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(currentSession));
+    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(currentSession));
   } catch (e) {}
 
   applySessionUI();
@@ -1929,11 +1930,14 @@ function saveSession(riderName, roomCode, isLeader) {
 
 function loadSavedSession() {
   try {
-    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+    const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && parsed.riderName && parsed.roomCode && parsed.roomCode !== "----") {
         parsed.roomCode = parsed.roomCode.trim().toUpperCase();
+        if (!parsed.riderId) {
+          parsed.riderId = generateUUID();
+        }
         currentSession = parsed;
         return true;
       }
@@ -1943,17 +1947,22 @@ function loadSavedSession() {
 }
 
 function clearSession() {
-  if (sbClient && currentSession.riderId) {
-    sbClient
-      .from("riders")
-      .delete()
-      .eq("id", currentSession.riderId)
-      .then(() => {})
-      .catch(() => {});
+  if (currentSession.riderId) {
+    try {
+      supabaseRest(`riders?id=eq.${encodeURIComponent(currentSession.riderId)}`, "DELETE").catch(() => {});
+    } catch (e) {}
+    if (sbClient) {
+      sbClient
+        .from("riders")
+        .delete()
+        .eq("id", currentSession.riderId)
+        .then(() => {})
+        .catch(() => {});
+    }
   }
 
   try {
-    localStorage.removeItem(SESSION_STORAGE_KEY);
+    sessionStorage.removeItem(SESSION_STORAGE_KEY);
   } catch (e) {}
 
   if (dualSyncInterval) {
