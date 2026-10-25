@@ -593,13 +593,46 @@ let activeStragglerAlert = null;
 let lastConvoyAlarmTime = 0;
 
 const APPROACHING_POLICE_DISTANCE_KM = 1.5;
-const VERIFY_POLICE_TRIGGER_DISTANCE_KM = 0.5; // 500 meters
+const VERIFY_POLICE_TRIGGER_DISTANCE_KM = 0.16; // 160 meters (matches the 1/3rd red zone radius)
 let closestApproachingPolice = null;
 let lastPoliceVoiceAnnounceTime = 0;
 let activeVerifyReportId = null;
 
-// Road Transition Popup Timer
+// Road Transition Popup State & Timer
 let roadPopupTimer = null;
+let currentRoadTransitionDetails = null;
+
+// Floating Minimized Alert Dock & Permanent Dismiss Tracking
+const DISMISSED_ALERTS_STORAGE_KEY = "cholo_ghuri_dismissed_alerts";
+function getStoredDismissedAlerts() {
+  try {
+    const raw = sessionStorage.getItem(DISMISSED_ALERTS_STORAGE_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) return new Set(arr.map(String));
+    }
+  } catch (e) {}
+  return new Set();
+}
+
+window.dismissedAlertIds = getStoredDismissedAlerts();
+
+window.isAlertDismissed = function(alertId) {
+  if (!alertId) return false;
+  return window.dismissedAlertIds && window.dismissedAlertIds.has(String(alertId));
+};
+
+function markAlertAsDismissed(alertId) {
+  if (!alertId) return;
+  window.dismissedAlertIds.add(String(alertId));
+  try {
+    sessionStorage.setItem(
+      DISMISSED_ALERTS_STORAGE_KEY,
+      JSON.stringify(Array.from(window.dismissedAlertIds))
+    );
+  } catch (e) {}
+}
+window.markAlertAsDismissed = markAlertAsDismissed;
 
 // PC Simulator & Dev Tools State
 let isSimulating = false;
@@ -1222,6 +1255,8 @@ function removePoliceMarker(reportId) {
     policeReportsMap.delete(reportId);
     playSound("deleteReport");
 
+    hideMiniPoliceAlert(reportId);
+
     if (activeVerifyReportId === reportId) {
       closeVerifyPoliceModal();
     }
@@ -1266,8 +1301,13 @@ function evaluatePoliceProximity() {
       speakAnnouncement(`Police checkpost ahead, ${distFormatted} away, reported by ${closest.reported_by || "Biker"}.`);
     }
 
-    if (minDistanceKm <= VERIFY_POLICE_TRIGGER_DISTANCE_KM && activeVerifyReportId !== closest.id) {
-      openVerifyPoliceModal(closest.id);
+    // Within 160m red zone: Show Minimized Round Icon in #miniAlertDock (do NOT open big modal automatically!)
+    if (minDistanceKm <= VERIFY_POLICE_TRIGGER_DISTANCE_KM) {
+      if (!window.isAlertDismissed(closest.id)) {
+        showMiniPoliceAlert(closest, minDistanceKm);
+      }
+    } else if (minDistanceKm > 0.35) {
+      hideMiniPoliceAlert(closest.id);
     }
   } else {
     closestApproachingPolice = null;
@@ -1348,6 +1388,160 @@ function closeVerifyPoliceModal() {
     modal.style.display = "none";
   }, 300);
 }
+
+function minimizeVerifyPoliceModal() {
+  // Closes big modal without dismissing: floating icon remains in #miniAlertDock!
+  closeVerifyPoliceModal();
+}
+window.minimizeVerifyPoliceModal = minimizeVerifyPoliceModal;
+
+function dismissVerifyPoliceModal() {
+  if (activeVerifyReportId) {
+    markAlertAsDismissed(activeVerifyReportId);
+    hideMiniPoliceAlert(activeVerifyReportId);
+  }
+  closeVerifyPoliceModal();
+}
+window.dismissVerifyPoliceModal = dismissVerifyPoliceModal;
+
+// ==========================================
+// FLOATING MINIMIZED DOCK ICON HANDLERS
+// ==========================================
+function showMiniPoliceAlert(report, distKm) {
+  if (!report || !report.id) return;
+  if (window.isAlertDismissed(report.id)) return;
+
+  const dock = document.getElementById("miniAlertDock");
+  if (!dock) return;
+
+  const itemId = `miniAlertItem_police_${report.id}`;
+  let item = document.getElementById(itemId);
+
+  const distMeters = Math.round((distKm !== undefined && distKm !== null ? distKm : 0.12) * 1000);
+  const distLabel = distKm !== undefined && distKm < 1 ? `${distMeters}m` : "POLICE";
+
+  if (!item) {
+    item = document.createElement("div");
+    item.id = itemId;
+    item.className = "mini-alert-item mini-alert-popin";
+    item.innerHTML = `
+      <button 
+        type="button" 
+        class="mini-alert-btn police-alert" 
+        onclick="window.expandMiniPoliceAlert('${report.id}')"
+        title="Police Checkpost Alert (${distLabel} away) - Tap to Open Details"
+      >
+        <i class="fa-solid fa-shield-halved text-xl text-white"></i>
+        <span class="mini-alert-badge badge-police" id="miniPoliceBadge_${report.id}">${distLabel}</span>
+      </button>
+      <button 
+        type="button" 
+        class="mini-alert-close" 
+        onclick="window.dismissMiniAlert('police', '${report.id}', event)" 
+        title="Permanently Dismiss (Cross)"
+      >&times;</button>
+    `;
+    dock.appendChild(item);
+  } else {
+    const badge = document.getElementById(`miniPoliceBadge_${report.id}`);
+    if (badge) badge.textContent = distLabel;
+  }
+}
+window.showMiniPoliceAlert = showMiniPoliceAlert;
+
+function hideMiniPoliceAlert(reportId) {
+  if (!reportId) return;
+  const itemId = `miniAlertItem_police_${reportId}`;
+  const item = document.getElementById(itemId);
+  if (item) {
+    item.classList.add("mini-alert-popout");
+    setTimeout(() => {
+      if (item && item.parentNode) item.parentNode.removeChild(item);
+    }, 200);
+  }
+}
+window.hideMiniPoliceAlert = hideMiniPoliceAlert;
+
+window.expandMiniPoliceAlert = function(reportId) {
+  openVerifyPoliceModal(reportId);
+};
+
+function showMiniRoadAlert(roadName, limit, roadType, alertId) {
+  if (!alertId) alertId = `road_${encodeURIComponent(roadName)}_${limit}`;
+  if (window.isAlertDismissed(alertId)) return;
+
+  currentRoadTransitionDetails = { roadName, limit, roadType, alertId };
+
+  const dock = document.getElementById("miniAlertDock");
+  if (!dock) return;
+
+  const itemId = `miniAlertItem_road_${alertId}`;
+  let item = document.getElementById(itemId);
+
+  if (!item) {
+    item = document.createElement("div");
+    item.id = itemId;
+    item.className = "mini-alert-item mini-alert-popin";
+    item.innerHTML = `
+      <button 
+        type="button" 
+        class="mini-alert-btn speed-alert" 
+        onclick="window.expandMiniRoadAlert('${alertId}')"
+        title="Speed Limit ${limit} KM/H - ${escapeHtml(roadName)} (Tap for Details)"
+      >
+        <div class="flex flex-col items-center justify-center -space-y-0.5 select-none pointer-events-none">
+          <span class="text-base font-black font-hud text-slate-900 leading-none">${limit}</span>
+          <span class="text-[7.5px] font-bold text-red-600 tracking-tighter leading-none">LIMIT</span>
+        </div>
+        <span class="mini-alert-badge badge-speed">${limit} KM/H</span>
+      </button>
+      <button 
+        type="button" 
+        class="mini-alert-close" 
+        onclick="window.dismissMiniAlert('road', '${alertId}', event)" 
+        title="Permanently Dismiss (Cross)"
+      >&times;</button>
+    `;
+    dock.appendChild(item);
+  }
+}
+window.showMiniRoadAlert = showMiniRoadAlert;
+
+function hideMiniRoadAlert(alertId) {
+  if (!alertId && currentRoadTransitionDetails) alertId = currentRoadTransitionDetails.alertId;
+  if (!alertId) return;
+  const itemId = `miniAlertItem_road_${alertId}`;
+  const item = document.getElementById(itemId);
+  if (item) {
+    item.classList.add("mini-alert-popout");
+    setTimeout(() => {
+      if (item && item.parentNode) item.parentNode.removeChild(item);
+    }, 200);
+  }
+}
+window.hideMiniRoadAlert = hideMiniRoadAlert;
+
+window.expandMiniRoadAlert = function(alertId) {
+  openRoadTransitionModal();
+};
+
+window.dismissMiniAlert = function(type, alertId, event) {
+  if (event) {
+    event.stopPropagation();
+    event.preventDefault();
+  }
+  markAlertAsDismissed(alertId);
+
+  if (type === "police") {
+    hideMiniPoliceAlert(alertId);
+    if (activeVerifyReportId === alertId) {
+      closeVerifyPoliceModal();
+    }
+  } else if (type === "road") {
+    hideMiniRoadAlert(alertId);
+    dismissRoadTransitionPopup();
+  }
+};
 
 async function submitPoliceVote(reportId, isTrue) {
   const report = policeReportsMap.get(reportId);
@@ -2079,16 +2273,37 @@ function triggerRoadTransitionPopup(newRoadName, newSpeedLimit, newRoadType = "H
   const speedLimitVal = document.getElementById("speedLimitVal");
   if (speedLimitVal) speedLimitVal.textContent = newSpeedLimit;
 
+  playSound("roadChange");
+  speakAnnouncement(`Entering ${newRoadName}. Speed limit is ${newSpeedLimit} kilometers per hour.`);
+
+  const roadAlertId = `road_${encodeURIComponent(newRoadName)}_${newSpeedLimit}`;
+  currentRoadTransitionDetails = {
+    roadName: newRoadName,
+    limit: newSpeedLimit,
+    roadType: newRoadType,
+    alertId: roadAlertId
+  };
+
+  // Show Minimized Floating Round Icon instead of opening the giant modal automatically!
+  if (!window.isAlertDismissed(roadAlertId)) {
+    showMiniRoadAlert(newRoadName, newSpeedLimit, newRoadType, roadAlertId);
+  }
+}
+
+function openRoadTransitionModal() {
+  if (!currentRoadTransitionDetails) return;
+  const { roadName, limit, roadType } = currentRoadTransitionDetails;
+
   const modal = document.getElementById("roadTransitionModal");
   const roadNameEl = document.getElementById("popupRoadName");
   const roadTypeEl = document.getElementById("popupRoadType");
   const speedLimitEl = document.getElementById("popupSpeedLimit");
   const voiceMsgEl = document.getElementById("popupVoiceMsg");
 
-  if (roadNameEl) roadNameEl.textContent = newRoadName;
-  if (roadTypeEl) roadTypeEl.textContent = newRoadType;
-  if (speedLimitEl) speedLimitEl.textContent = newSpeedLimit;
-  if (voiceMsgEl) voiceMsgEl.textContent = `Announced: Speed limit updated to ${newSpeedLimit} KM/H!`;
+  if (roadNameEl) roadNameEl.textContent = roadName;
+  if (roadTypeEl) roadTypeEl.textContent = roadType || "Highway / Expressway";
+  if (speedLimitEl) speedLimitEl.textContent = limit;
+  if (voiceMsgEl) voiceMsgEl.textContent = `Announced: Speed limit updated to ${limit} KM/H!`;
 
   if (modal) {
     modal.style.display = "flex";
@@ -2105,24 +2320,40 @@ function triggerRoadTransitionPopup(newRoadName, newSpeedLimit, newRoadType = "H
     progressBar.style.animation = "roadTimer 5s linear forwards";
   }
 
-  playSound("roadChange");
-  speakAnnouncement(`Entering ${newRoadName}. Speed limit is ${newSpeedLimit} kilometers per hour.`);
-
   if (roadPopupTimer) clearTimeout(roadPopupTimer);
   roadPopupTimer = setTimeout(() => {
-    dismissRoadTransitionPopup();
+    minimizeRoadTransitionPopup();
   }, 5000);
 }
+window.openRoadTransitionModal = openRoadTransitionModal;
 
-function dismissRoadTransitionPopup() {
+function minimizeRoadTransitionPopup() {
+  if (roadPopupTimer) clearTimeout(roadPopupTimer);
   const modal = document.getElementById("roadTransitionModal");
   if (!modal) return;
   modal.classList.add("opacity-0", "pointer-events-none");
   setTimeout(() => {
     modal.classList.add("hidden");
     modal.style.display = "none";
-  }, 350);
+  }, 300);
 }
+window.minimizeRoadTransitionPopup = minimizeRoadTransitionPopup;
+
+function dismissRoadTransitionPopup() {
+  if (roadPopupTimer) clearTimeout(roadPopupTimer);
+  if (currentRoadTransitionDetails && currentRoadTransitionDetails.alertId) {
+    markAlertAsDismissed(currentRoadTransitionDetails.alertId);
+    hideMiniRoadAlert(currentRoadTransitionDetails.alertId);
+  }
+  const modal = document.getElementById("roadTransitionModal");
+  if (!modal) return;
+  modal.classList.add("opacity-0", "pointer-events-none");
+  setTimeout(() => {
+    modal.classList.add("hidden");
+    modal.style.display = "none";
+  }, 300);
+}
+window.dismissRoadTransitionPopup = dismissRoadTransitionPopup;
 
 function evaluateOverspeed(currentSpeed) {
   const overspeedAlertEl = document.getElementById("overspeedBorderAlert");
@@ -3597,10 +3828,26 @@ function initApp() {
     });
   }
 
+  const minimizeVerifyModalBtn = document.getElementById("minimizeVerifyModalBtn");
+  if (minimizeVerifyModalBtn) {
+    minimizeVerifyModalBtn.addEventListener("click", () => {
+      playSound("click");
+      minimizeVerifyPoliceModal();
+    });
+  }
+
   if (closeVerifyModalBtn) {
     closeVerifyModalBtn.addEventListener("click", () => {
       playSound("click");
-      closeVerifyPoliceModal();
+      dismissVerifyPoliceModal();
+    });
+  }
+
+  const minimizeRoadPopupBtn = document.getElementById("minimizeRoadPopupBtn");
+  if (minimizeRoadPopupBtn) {
+    minimizeRoadPopupBtn.addEventListener("click", () => {
+      playSound("click");
+      minimizeRoadTransitionPopup();
     });
   }
 

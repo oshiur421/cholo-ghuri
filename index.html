@@ -259,6 +259,9 @@
   <!-- ==================== LEAFLET MAP CONTAINER ==================== -->
   <div id="map" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1;" class="fixed inset-0 z-[1] w-screen h-screen"></div>
 
+  <!-- ==================== FLOATING MINIMIZED ALERT DOCK ==================== -->
+  <div id="miniAlertDock" class="mini-alert-dock" aria-label="Active floating alerts"></div>
+
   <!-- ==================== TOP FLOATING HUD BAR ==================== -->
   <header class="hud-top-bar fixed top-0 left-0 right-0 z-[10000] p-1.5 sm:p-3 pointer-events-none w-full max-w-full overflow-x-hidden" style="pointer-events: none !important; z-index: 10000 !important;">
     <div class="hud-top-container max-w-7xl mx-auto flex flex-col gap-1.5 sm:gap-2.5 w-full pointer-events-none" style="pointer-events: none !important;">
@@ -503,9 +506,12 @@
         <span id="popupVoiceMsg">Announced: Speed limit updated!</span>
       </p>
 
-      <div class="mt-4">
-        <button id="dismissRoadPopupBtn" class="neon-btn-green px-8 py-2.5 rounded-xl text-xs font-cyber font-bold uppercase shadow-lg">
-          CONFIRM (5s)
+      <div class="mt-4 flex items-center justify-center gap-2.5">
+        <button id="minimizeRoadPopupBtn" type="button" class="px-5 py-2.5 rounded-xl text-xs font-cyber font-bold uppercase bg-slate-800/90 hover:bg-slate-700 text-cyan-300 border border-cyan-500/40 shadow-lg cursor-pointer flex items-center gap-1.5 transition-all">
+          <i class="fa-solid fa-compress text-[11px]"></i> MINIMIZE
+        </button>
+        <button id="dismissRoadPopupBtn" type="button" class="neon-btn-green px-6 py-2.5 rounded-xl text-xs font-cyber font-bold uppercase shadow-lg cursor-pointer">
+          DISMISS / CONFIRM
         </button>
       </div>
 
@@ -803,10 +809,15 @@
         </button>
       </div>
 
-      <!-- Close Button -->
-      <button id="closeVerifyModalBtn" class="mt-4 text-xs text-slate-400 hover:text-white uppercase font-cyber font-bold tracking-wider py-1 px-3 cursor-pointer">
-        Dismiss / Close
-      </button>
+      <!-- Action Buttons -->
+      <div class="mt-4 flex items-center justify-center gap-3">
+        <button id="minimizeVerifyModalBtn" type="button" class="text-xs text-cyan-400 hover:text-cyan-300 uppercase font-cyber font-bold tracking-wider py-1.5 px-3.5 rounded-lg border border-cyan-500/30 bg-cyan-950/40 hover:bg-cyan-900/40 cursor-pointer flex items-center gap-1.5 transition-colors">
+          <i class="fa-solid fa-compress text-[10px]"></i> Minimize
+        </button>
+        <button id="closeVerifyModalBtn" type="button" class="text-xs text-slate-400 hover:text-white uppercase font-cyber font-bold tracking-wider py-1.5 px-3.5 rounded-lg border border-slate-700 bg-slate-800/80 hover:bg-slate-700 cursor-pointer transition-colors">
+          Dismiss / Close
+        </button>
+      </div>
     </div>
   </div>
 
