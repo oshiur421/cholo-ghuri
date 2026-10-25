@@ -192,14 +192,14 @@
       }
     };
 
-    var lastGroupDrawerToggleMs = 0;
     window.toggleGroupDrawer = function(forceOpen) {
       try {
         var now = Date.now();
-        if (forceOpen === undefined && (now - lastGroupDrawerToggleMs) < 250) {
+        var lastToggle = window._lastGroupDrawerToggleMs || 0;
+        if (forceOpen === undefined && (now - lastToggle) < 250) {
           return;
         }
-        lastGroupDrawerToggleMs = now;
+        window._lastGroupDrawerToggleMs = now;
 
         var drawer = document.getElementById("convoyDrawer") || 
                      document.getElementById("groupDrawer") || 
@@ -272,7 +272,7 @@
 <body class="bg-cyber-dark text-slate-100 flex flex-col h-screen w-screen overflow-hidden select-none">
 
   <!-- ==================== LEAFLET MAP CONTAINER ==================== -->
-  <div id="map" style="position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 1; background: #0b0f17;" class="fixed inset-0 z-[1] w-screen h-screen"></div>
+  <div id="map" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1;" class="fixed inset-0 z-[1] w-screen h-screen"></div>
 
   <!-- ==================== TOP FLOATING HUD BAR ==================== -->
   <header class="hud-top-bar fixed top-0 left-0 right-0 z-[10000] p-1.5 sm:p-3 pointer-events-none w-full max-w-full overflow-x-hidden" style="pointer-events: none !important; z-index: 10000 !important;">
@@ -307,8 +307,8 @@
                 <span class="hidden sm:inline">INVITE</span>
               </button>
               <!-- DB Sync Status Dot -->
-              <span id="dbSyncStatusWrapper" class="flex items-center gap-1 pl-0.5" title="DB Sync: Connecting...">
-                <span id="dbSyncDot" class="w-2 h-2 rounded-full bg-slate-500 transition-colors duration-300"></span>
+              <span id="dbSyncStatusWrapper" class="flex items-center gap-1 pl-0.5" title="DB Sync: Connected">
+                <span id="dbSyncDot" class="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(0,255,136,0.85)] transition-all duration-300"></span>
               </span>
             </div>
           </div>

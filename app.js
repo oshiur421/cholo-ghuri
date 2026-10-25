@@ -4,8 +4,36 @@
  */
 
 // ==========================================
-// 0. GLOBAL SIMULATOR & ACTION HANDLERS
+// 0. GUARANTEED FAILSAFE LEAFLET MAP INITIALIZER & ACTION HANDLERS
 // ==========================================
+window.ensureLeafletMap = function() {
+  const mapEl = document.getElementById('map');
+  if (!mapEl || typeof L === 'undefined') return null;
+  if (window.map && typeof window.map.invalidateSize === 'function') {
+    window.map.invalidateSize();
+    return window.map;
+  }
+  // If Leaflet already attached to #map, clear _leaflet_id only if window.map was lost
+  if (mapEl._leaflet_id && !window.map) {
+    mapEl._leaflet_id = null;
+    mapEl.innerHTML = '';
+  }
+  window.map = L.map('map', { zoomControl: false, attributionControl: true }).setView([23.8103, 90.4125], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '© OpenStreetMap'
+  }).addTo(window.map);
+  setTimeout(() => window.map.invalidateSize(), 150);
+  setTimeout(() => window.map.invalidateSize(), 600);
+  return window.map;
+};
+
+// Immediately ensure Leaflet map exists on script load
+try {
+  window.ensureLeafletMap();
+} catch (e) {
+  console.warn("Immediate map init warning:", e);
+}
 window.closeSimDevPanel = function(e) {
   if (e) e.stopPropagation();
   const panel = document.getElementById('simPanel');
@@ -262,14 +290,14 @@ window.closeGroupDrawer = function() {
   }
 };
 
-let lastGroupDrawerToggleMs = 0;
 window.toggleGroupDrawer = function(forceOpen) {
   try {
     const now = Date.now();
-    if (forceOpen === undefined && (now - lastGroupDrawerToggleMs) < 250) {
+    const lastToggle = window._lastGroupDrawerToggleMs || 0;
+    if (forceOpen === undefined && (now - lastToggle) < 250) {
       return;
     }
-    lastGroupDrawerToggleMs = now;
+    window._lastGroupDrawerToggleMs = now;
 
     if (typeof playSound === "function") playSound("click");
     const drawer = document.getElementById("convoyDrawer") || 
@@ -496,8 +524,8 @@ const allConvoyRiders = new Map();
 // Police Reports Map: reportId -> { id, lat, lng, reported_by, true_votes, false_votes, created_at, marker, circle }
 const policeReportsMap = new Map();
 
-// Leaflet Map & Markers
-let map = null;
+// Leaflet Map & Markers (synchronized with window.map)
+var map = window.map || (window.ensureLeafletMap ? window.ensureLeafletMap() : null);
 let userMarker = null;
 const remoteRiderMarkers = new Map(); // riderId -> Leaflet marker
 
@@ -1763,62 +1791,37 @@ async function broadcastCurrentLocation(updatePresence = false) {
 // 12. LEAFLET MAP & BIKER MARKERS
 // ==========================================
 function initMap() {
+  map = window.ensureLeafletMap();
   if (map) {
+    if (!map._choloListenersAttached) {
+      map._choloListenersAttached = true;
+      map.on("dragstart", () => {
+        isCameraLocked = false;
+        updateRecenterButtonUI();
+      });
+
+      // PC Teleport / Click-to-move listener
+      map.on("click", (e) => {
+        if (isTeleportClickActive) {
+          teleportBikerTo(e.latlng.lat, e.latlng.lng);
+        }
+      });
+    }
+
+    updateUserMarker(riderLocation.lat || 23.8103, riderLocation.lng || 90.4125, riderLocation.heading || 0);
+
     map.invalidateSize();
-    return;
+    setTimeout(() => { if (map) map.invalidateSize(); }, 150);
+    setTimeout(() => { if (map) map.invalidateSize(); }, 500);
   }
+  return map;
+}
 
-  // Guard against "Map container is already initialized"
-  const mapEl = document.getElementById("map");
-  if (!mapEl) return;
-  if (mapEl._leaflet_id && window.map) {
-    window.map.invalidateSize();
-    return;
-  }
-
-  // Fallback default coordinates: Dhaka, Bangladesh [23.8103, 90.4125], zoom 13
-  const defaultCoords = [23.8103, 90.4125];
-
-  try {
-    map = L.map("map", {
-      center: defaultCoords,
-      zoom: 13,
-      zoomControl: false,
-      attributionControl: true
-    });
-    window.map = map;
-  } catch (err) {
-    if (String(err).includes("already initialized") && window.map) {
-      window.map.invalidateSize();
-      return;
-    }
-    console.error("Leaflet Map init error:", err);
-    return;
-  }
-
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    maxZoom: 19
-  }).addTo(map);
-
-  map.on("dragstart", () => {
-    isCameraLocked = false;
-    updateRecenterButtonUI();
-  });
-
-  // PC Teleport / Click-to-move listener
-  map.on("click", (e) => {
-    if (isTeleportClickActive) {
-      teleportBikerTo(e.latlng.lat, e.latlng.lng);
-    }
-  });
-
-  updateUserMarker(riderLocation.lat || 23.8103, riderLocation.lng || 90.4125, riderLocation.heading || 0);
-
-  // Invalidate size immediately and after short delay to ensure full rendering
-  map.invalidateSize();
-  setTimeout(() => { if (map) map.invalidateSize(); }, 200);
-  setTimeout(() => { if (map) map.invalidateSize(); }, 500);
+// Ensure map and user marker are initialized immediately
+try {
+  initMap();
+} catch (e) {
+  console.warn("Immediate initMap execution notice:", e);
 }
 
 function createBikerMarkerIcon(riderName, isLeader, speed, heading = 0) {
@@ -2515,6 +2518,14 @@ let hasAppInitialized = false;
 function initApp() {
   if (hasAppInitialized) return;
   hasAppInitialized = true;
+
+  // Initialize Map and DB Sync status immediately so tiles, marker, and green dot render right away
+  try {
+    initMap();
+    updateSyncStatusUI(true);
+  } catch (err) {
+    console.warn("initApp immediate map/sync setup notice:", err);
+  }
   // Form & Inputs
   const onboardingForm = document.getElementById("onboardingForm");
   const riderNameInput = document.getElementById("riderNameInput");

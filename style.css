@@ -219,18 +219,22 @@ body {
   animation: pulseRadarRing 2s cubic-bezier(0, 0, 0.2, 1) infinite;
 }
 
-/* Leaflet Custom Elements */
 #map {
   position: fixed !important;
-  inset: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
   width: 100vw !important;
   height: 100vh !important;
-  height: 100dvh !important;
-  background: #0b0f17 !important;
   z-index: 1 !important;
 }
 
-/* Invert and darken OpenStreetMap tiles for sleek cyber dark-mode theme */
+.leaflet-container,
+.leaflet-pane,
+.leaflet-tile-pane {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
 .leaflet-tile-pane {
   filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
 }
