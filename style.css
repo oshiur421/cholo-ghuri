@@ -905,6 +905,27 @@ body {
   box-shadow: 0 0 15px rgba(251, 191, 36, 0.2);
 }
 
+.kick-rider-btn {
+  background: rgba(153, 27, 27, 0.5);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  color: #fca5a5;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+.kick-rider-btn:hover {
+  background: rgba(220, 38, 38, 0.85);
+  border-color: #ef4444;
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.55);
+  transform: translateY(-1px) scale(1.04);
+}
+
+.kick-rider-btn:active {
+  transform: translateY(1px) scale(0.96);
+}
+
 /* ==================== APPROACHING POLICE RADAR ALERT ==================== */
 #approachingPoliceBanner {
   position: fixed;

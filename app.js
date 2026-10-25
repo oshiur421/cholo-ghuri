@@ -501,6 +501,11 @@ let lastUpsertTime = 0;
 // Convoy Members Map: riderId -> Rider Object
 const allConvoyRiders = new Map();
 
+// Convoy Teammate Kick & Ejection Tracking
+window.kickedRiderIds = window.kickedRiderIds || new Set();
+let hasJoinedDB = false;
+let isHandlingKick = false;
+
 // Police Reports Map: reportId -> { id, lat, lng, reported_by, true_votes, false_votes, created_at, marker, circle }
 const policeReportsMap = new Map();
 
@@ -1239,15 +1244,27 @@ function renderGroupRidersList(leader) {
         statusBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">IN PACK</span>`;
       }
 
+      const isCurrentLeader = Boolean(currentSession && currentSession.isLeader);
+      const canKick = isCurrentLeader && !isMe;
+      const kickBtnHtml = canKick
+        ? `<button type="button" class="kick-rider-btn px-2 py-0.5 rounded text-[10px] font-cyber font-bold flex items-center gap-1 shadow-sm active:scale-95 cursor-pointer ml-1.5" onclick="event.stopPropagation(); window.kickRiderFromConvoy('${r.id}', '${escapeHtml(r.rider_name)}')" title="Remove ${escapeHtml(r.rider_name)} from convoy">
+             <i class="fa-solid fa-user-xmark text-[9px]"></i>
+             <span>Kick</span>
+           </button>`
+        : "";
+
       return `
         <div class="${cardClass} cursor-pointer group hover:border-emerald-400 transition-all" onclick="centerOnRider('${r.id}')" title="Tap to locate ${escapeHtml(r.rider_name)} on map">
           <div class="flex items-center justify-between mb-1.5">
-            <div class="flex items-center gap-1.5 font-cyber font-bold text-xs text-slate-100">
+            <div class="flex items-center gap-1.5 font-cyber font-bold text-xs text-slate-100 min-w-0">
               ${isLeader ? '<i class="fa-solid fa-crown text-amber-400 text-xs"></i>' : '<i class="fa-solid fa-motorcycle text-neon-green text-xs"></i>'}
-              <span class="truncate max-w-[130px]">${escapeHtml(r.rider_name)}</span>
+              <span class="truncate max-w-[110px]">${escapeHtml(r.rider_name)}</span>
               ${isMe ? '<span class="text-[9px] text-emerald-400 font-semibold px-1 rounded bg-emerald-500/10 border border-emerald-500/30">You</span>' : ''}
             </div>
-            ${statusBadge}
+            <div class="flex items-center">
+              ${statusBadge}
+              ${kickBtnHtml}
+            </div>
           </div>
           <div class="flex items-center justify-between text-[11px] text-slate-400 font-semibold mb-1.5">
             <span class="flex items-center gap-1">
@@ -1288,6 +1305,203 @@ window.centerOnRider = function(riderId) {
     }
   }
 };
+
+// ==========================================
+// 9B. CONVOY TEAMMATE REMOVAL & KICK LOGIC
+// ==========================================
+window.kickRiderFromConvoy = async function(targetRiderId, targetRiderName) {
+  if (!currentSession || !currentSession.isLeader) {
+    if (typeof showRadarToast === "function") {
+      showRadarToast("ACTION DENIED", "Only the Ride Leader can remove teammates.");
+    }
+    return;
+  }
+
+  if (targetRiderId === currentSession.riderId) {
+    if (typeof showRadarToast === "function") {
+      showRadarToast("ACTION DENIED", "You cannot kick yourself from the convoy.");
+    }
+    return;
+  }
+
+  const displayName = targetRiderName || "Rider";
+  if (!confirm(`Are you sure you want to remove ${displayName} from this convoy?`)) {
+    return;
+  }
+
+  try {
+    if (typeof playSound === "function") playSound("click");
+
+    // 1. Maintain a local Set so polling does not re-add this rider
+    window.kickedRiderIds = window.kickedRiderIds || new Set();
+    window.kickedRiderIds.add(targetRiderId);
+
+    // 2. Immediately remove rider's marker from map and UI, updating count
+    allConvoyRiders.delete(targetRiderId);
+    removeRemoteRiderMarker(targetRiderId);
+    evaluateConvoyDistances();
+    updateRidersCount();
+
+    // 3. Broadcast rider_kicked event on Supabase Realtime channel
+    if (realtimeChannel) {
+      try {
+        realtimeChannel.send({
+          type: "broadcast",
+          event: "rider_kicked",
+          payload: {
+            riderId: targetRiderId,
+            roomCode: currentSession.roomCode
+          }
+        });
+      } catch (bcErr) {
+        console.debug("[Broadcast kick error]", bcErr);
+      }
+    }
+
+    // 4. Update room_code of that rider row to 'KICKED_' + currentSession.roomCode before deleting
+    const kickedRoomCode = "KICKED_" + (currentSession.roomCode || "CONVOY");
+    try {
+      await supabaseRest(
+        `riders?id=eq.${encodeURIComponent(targetRiderId)}`,
+        "PATCH",
+        { room_code: kickedRoomCode }
+      );
+    } catch (patchErr) {
+      console.debug("[Patch kicked rider error]", patchErr);
+    }
+
+    // 5. Delete rider row via direct REST and supabase-js
+    try {
+      await supabaseRest(
+        `riders?id=eq.${encodeURIComponent(targetRiderId)}`,
+        "DELETE"
+      );
+    } catch (delRestErr) {
+      console.debug("[Delete kicked rider rest error]", delRestErr);
+    }
+
+    if (sbClient) {
+      try {
+        await sbClient.from("riders").delete().eq("id", targetRiderId);
+      } catch (sbDelErr) {
+        console.debug("[sbClient delete error]", sbDelErr);
+      }
+    }
+
+    // 6. Show toast notification to the Leader
+    if (typeof showRadarToast === "function") {
+      showRadarToast("CONVOY SQUAD", `🚫 Removed ${displayName} from convoy`);
+    }
+  } catch (err) {
+    console.error("Error in kickRiderFromConvoy:", err);
+  }
+};
+
+async function checkIfCurrentRiderKicked() {
+  if (!currentSession.riderId || !hasJoinedDB) return false;
+  try {
+    const res = await supabaseRest(
+      `riders?id=eq.${encodeURIComponent(currentSession.riderId)}&select=id,room_code`,
+      "GET"
+    );
+    if (Array.isArray(res)) {
+      // If row does not exist in riders table, rider was deleted/kicked
+      if (res.length === 0) {
+        return true;
+      }
+      const myRow = res[0];
+      if (myRow && myRow.room_code) {
+        if (myRow.room_code.startsWith("KICKED_")) {
+          return true;
+        }
+        const currentClean = (currentSession.roomCode || "").trim().toUpperCase();
+        const rowClean = myRow.room_code.trim().toUpperCase();
+        if (currentClean && rowClean !== currentClean) {
+          return true;
+        }
+      }
+    }
+  } catch (err) {
+    console.debug("[checkIfCurrentRiderKicked error]", err);
+  }
+  return false;
+}
+
+function handleKickedFromConvoy() {
+  if (isHandlingKick) return;
+  isHandlingKick = true;
+
+  try {
+    // 1. Immediately stop dual sync and upsert loops
+    if (dualSyncInterval) {
+      clearInterval(dualSyncInterval);
+      dualSyncInterval = null;
+    }
+    if (upsertInterval) {
+      clearInterval(upsertInterval);
+      upsertInterval = null;
+    }
+
+    hasJoinedDB = false;
+
+    // 2. Unsubscribe channels
+    if (realtimeChannel && sbClient) {
+      try { sbClient.removeChannel(realtimeChannel); } catch (e) {}
+      realtimeChannel = null;
+    }
+    if (ridersDbSubscription && sbClient) {
+      try { sbClient.removeChannel(ridersDbSubscription); } catch (e) {}
+      ridersDbSubscription = null;
+    }
+    if (policeDbSubscription && sbClient) {
+      try { sbClient.removeChannel(policeDbSubscription); } catch (e) {}
+      policeDbSubscription = null;
+    }
+
+    // 3. Clear session storage so user doesn't auto-reconnect
+    try {
+      sessionStorage.removeItem(SESSION_STORAGE_KEY);
+    } catch (e) {}
+
+    // 4. Remove markers and reset convoy state
+    remoteRiderMarkers.forEach((marker) => map && map.removeLayer(marker));
+    remoteRiderMarkers.clear();
+    allConvoyRiders.clear();
+    updateRidersCount();
+
+    // 5. Reset session object without re-upserting
+    currentSession = {
+      riderId: generateUUID(),
+      riderName: "",
+      roomCode: "",
+      isLeader: false
+    };
+
+    updateSyncStatusUI(false, "Disconnected (Kicked)");
+
+    // 6. Close drawer if open and reopen onboarding modal
+    if (typeof window.closeGroupDrawer === "function") {
+      window.closeGroupDrawer();
+    }
+    showOnboardingModal(true);
+
+    // 7. Show toast and alert to the kicked rider
+    if (typeof showRadarToast === "function") {
+      showRadarToast("CONVOY NOTICE", "⚠️ You have been removed from the convoy by the Ride Leader.");
+    }
+    if (typeof playSound === "function") {
+      playSound("overspeed");
+    }
+
+    setTimeout(() => {
+      alert("⚠️ You have been removed from the convoy by the Ride Leader.");
+      isHandlingKick = false;
+    }, 200);
+  } catch (err) {
+    console.error("Error in handleKickedFromConvoy:", err);
+    isHandlingKick = false;
+  }
+}
 
 // ==========================================
 // 10. ROAD TRANSITIONS & SPEED LIMITS
@@ -1488,6 +1702,7 @@ function updateSyncStatusUI(isSuccess, errorMsg = "") {
 
 async function upsertLiveRiderData(force = false) {
   if (!currentSession.roomCode || currentSession.roomCode === "----" || !currentSession.riderId) return { success: true };
+  if (isHandlingKick) return { success: false, error: "Kicked from convoy" };
 
   const now = Date.now();
   if (!force && now - lastUpsertTime < 1200) {
@@ -1509,6 +1724,7 @@ async function upsertLiveRiderData(force = false) {
     };
 
     await supabaseRest("riders?on_conflict=id", "POST", payload);
+    hasJoinedDB = true;
     return { success: true };
   } catch (err) {
     console.debug("[supabaseRest riders upsert error]", err);
@@ -1532,6 +1748,8 @@ async function fetchExistingRiders() {
       riders.forEach((r) => {
         if (!r || !r.id) return;
         if (r.id === currentSession.riderId) return;
+        if ((r.room_code || "").startsWith("KICKED_")) return;
+        if (window.kickedRiderIds && window.kickedRiderIds.has(r.id)) return;
 
         // Render ALL rows returned directly without client clock-skew filtering
         if (r.lat !== undefined && r.lat !== null && r.lng !== undefined && r.lng !== null) {
@@ -1560,6 +1778,18 @@ async function fetchExistingRiders() {
 
 async function runDualSyncLoop() {
   if (!currentSession.roomCode || currentSession.roomCode === "----" || !currentSession.riderId) return;
+  if (isHandlingKick) return;
+
+  // Requirement: FIRST fetch room riders / current rider's row BEFORE upserting!
+  // If hasJoinedDB === true and rider row no longer exists or room_code starts with 'KICKED_':
+  // Immediately stop sync loop, clear session, and force exit without re-upserting!
+  if (hasJoinedDB && currentSession.riderId) {
+    const isKicked = await checkIfCurrentRiderKicked();
+    if (isKicked) {
+      handleKickedFromConvoy();
+      return; // DO NOT upsert!
+    }
+  }
 
   let hasError = false;
   let firstErrorMessage = "";
@@ -1628,26 +1858,47 @@ function handleRiderDbEvent(payload) {
   const { eventType, new: newRecord, old: oldRecord } = payload;
 
   if (eventType === "DELETE") {
+    if (oldRecord && oldRecord.id === currentSession.riderId && hasJoinedDB) {
+      handleKickedFromConvoy();
+      return;
+    }
     if (oldRecord && oldRecord.id) {
       allConvoyRiders.delete(oldRecord.id);
       removeRemoteRiderMarker(oldRecord.id);
       evaluateConvoyDistances();
+      updateRidersCount();
     }
     return;
   }
 
-  if (newRecord && newRecord.id !== currentSession.riderId) {
-    allConvoyRiders.set(newRecord.id, newRecord);
-    if (newRecord.lat && newRecord.lng) {
-      updateRemoteRiderMarker(newRecord);
+  if (newRecord) {
+    if (newRecord.id === currentSession.riderId && (newRecord.room_code || "").startsWith("KICKED_")) {
+      handleKickedFromConvoy();
+      return;
     }
-    evaluateConvoyDistances();
+    if (newRecord.id !== currentSession.riderId) {
+      if ((newRecord.room_code || "").startsWith("KICKED_") || (window.kickedRiderIds && window.kickedRiderIds.has(newRecord.id))) {
+        allConvoyRiders.delete(newRecord.id);
+        removeRemoteRiderMarker(newRecord.id);
+        evaluateConvoyDistances();
+        updateRidersCount();
+        return;
+      }
+      allConvoyRiders.set(newRecord.id, newRecord);
+      if (newRecord.lat && newRecord.lng) {
+        updateRemoteRiderMarker(newRecord);
+      }
+      evaluateConvoyDistances();
+      updateRidersCount();
+    }
   }
 }
 
 function joinSupabaseRoom(roomCode) {
   const cleanRoom = (roomCode || currentSession.roomCode || "").trim().toUpperCase();
   currentSession.roomCode = cleanRoom;
+  hasJoinedDB = false;
+  isHandlingKick = false;
 
   // Initial immediate queries via direct REST
   fetchExistingRiders();
@@ -1711,6 +1962,16 @@ function joinSupabaseRoom(roomCode) {
             allConvoyRiders.set(payload.id, payload);
             updateRemoteRiderMarker(payload);
             evaluateConvoyDistances();
+          }
+        })
+        .on("broadcast", { event: "rider_kicked" }, ({ payload }) => {
+          if (payload && payload.riderId === currentSession.riderId) {
+            handleKickedFromConvoy();
+          } else if (payload && payload.riderId) {
+            allConvoyRiders.delete(payload.riderId);
+            removeRemoteRiderMarker(payload.riderId);
+            evaluateConvoyDistances();
+            updateRidersCount();
           }
         })
         .on("broadcast", { event: "police_alert" }, ({ payload }) => {
@@ -2391,6 +2652,10 @@ function clearSession() {
   remoteRiderMarkers.forEach((marker) => map && map.removeLayer(marker));
   remoteRiderMarkers.clear();
   allConvoyRiders.clear();
+  updateRidersCount();
+
+  hasJoinedDB = false;
+  isHandlingKick = false;
 
   currentSession = {
     riderId: generateUUID(),
