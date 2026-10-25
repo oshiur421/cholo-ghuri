@@ -4,9 +4,35 @@
  */
 
 // ==========================================
-// 0. GLOBAL ONBOARDING MODAL & ACTION HANDLERS
-// (Defined at top-level outside listeners so inline HTML onclick never fails)
+// 0. GLOBAL SIMULATOR & ACTION HANDLERS
 // ==========================================
+window.closeSimDevPanel = function(e) {
+  if (e) e.stopPropagation();
+  const panel = document.getElementById('simPanel');
+  if (panel) {
+    panel.classList.add('hidden');
+    panel.style.setProperty('display', 'none', 'important');
+    panel.style.setProperty('opacity', '0', 'important');
+    panel.style.setProperty('pointer-events', 'none', 'important');
+  }
+};
+
+window.toggleSimDevPanel = function(e) {
+  if (e) e.stopPropagation();
+  const panel = document.getElementById('simPanel');
+  if (!panel) return;
+  const isHidden = panel.classList.contains('hidden') || panel.style.display === 'none';
+  if (isHidden) {
+    panel.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
+    panel.style.setProperty('display', 'block', 'important');
+    panel.style.setProperty('opacity', '1', 'important');
+    panel.style.setProperty('pointer-events', 'auto', 'important');
+    panel.style.setProperty('z-index', '99999', 'important');
+    if (typeof updateSimTargetPoliceInfo === "function") updateSimTargetPoliceInfo();
+  } else {
+    window.closeSimDevPanel();
+  }
+};
 window.openJoinModal = function() {
   const modal = document.getElementById("onboardingModal");
   if (modal) {
@@ -195,9 +221,10 @@ window.openGroupDrawer = function() {
     const backdrop = document.getElementById("drawerBackdrop");
     if (backdrop) {
       backdrop.classList.remove("hidden", "pointer-events-none");
-      backdrop.style.display = "block";
-      backdrop.style.opacity = "1";
-      backdrop.style.pointerEvents = "auto";
+      backdrop.classList.add("active", "open");
+      backdrop.style.setProperty("display", "block", "important");
+      backdrop.style.setProperty("opacity", "1", "important");
+      backdrop.style.setProperty("pointer-events", "auto", "important");
     }
 
     if (typeof evaluateConvoyDistances === "function") {
@@ -224,10 +251,11 @@ window.closeGroupDrawer = function() {
 
     const backdrop = document.getElementById("drawerBackdrop");
     if (backdrop) {
+      backdrop.classList.remove("active", "open");
       backdrop.classList.add("hidden", "pointer-events-none");
-      backdrop.style.display = "none";
-      backdrop.style.opacity = "0";
-      backdrop.style.pointerEvents = "none";
+      backdrop.style.setProperty("display", "none", "important");
+      backdrop.style.setProperty("opacity", "0", "important");
+      backdrop.style.setProperty("pointer-events", "none", "important");
     }
   } catch (err) {
     console.warn("Close group drawer error:", err);
@@ -272,9 +300,10 @@ window.toggleGroupDrawer = function(forceOpen) {
       const backdrop = document.getElementById("drawerBackdrop");
       if (backdrop) {
         backdrop.classList.remove("hidden", "pointer-events-none");
-        backdrop.style.display = "block";
-        backdrop.style.opacity = "1";
-        backdrop.style.pointerEvents = "auto";
+        backdrop.classList.add("active", "open");
+        backdrop.style.setProperty("display", "block", "important");
+        backdrop.style.setProperty("opacity", "1", "important");
+        backdrop.style.setProperty("pointer-events", "auto", "important");
       }
       if (typeof evaluateConvoyDistances === "function") {
         evaluateConvoyDistances();
@@ -290,7 +319,7 @@ window.toggleRidersDrawer = window.toggleGroupDrawer;
 
 // Universal Touch & Click Event Binding for mobile phones and desktop
 function setupGroupButtonsTouchAndClick() {
-  const groupBtns = document.querySelectorAll('#topRidersCountBtn, #topRightGroupBtn, #openRidersDrawerBtn, .group-trigger-btn');
+  const groupBtns = document.querySelectorAll('#topRidersCountBtn, .group-trigger-btn');
   groupBtns.forEach(btn => {
     if (!btn || btn.dataset.touchBound === "true") return;
     btn.dataset.touchBound = "true";
@@ -359,25 +388,7 @@ window.openReportPoliceModal = function() {
   }
 };
 
-window.toggleSimDevPanel = function() {
-  try {
-    if (typeof playSound === "function") playSound("click");
-    const simPanel = document.getElementById("simPanel");
-    if (simPanel) {
-      const isHidden = simPanel.classList.contains("opacity-0");
-      if (isHidden) {
-        simPanel.classList.remove("opacity-0", "pointer-events-none", "translate-y-8");
-        simPanel.classList.add("opacity-100", "translate-y-0");
-        if (typeof updateSimTargetPoliceInfo === "function") updateSimTargetPoliceInfo();
-      } else {
-        simPanel.classList.add("opacity-0", "pointer-events-none", "translate-y-8");
-        simPanel.classList.remove("opacity-100", "translate-y-0");
-      }
-    }
-  } catch (err) {
-    console.warn("Toggle sim dev panel notice:", err);
-  }
-};
+// Note: window.toggleSimDevPanel and window.closeSimDevPanel defined at top-level
 
 window.leaveActiveTour = function() {
   try {
@@ -1757,16 +1768,33 @@ function initMap() {
     return;
   }
 
+  // Guard against "Map container is already initialized"
+  const mapEl = document.getElementById("map");
+  if (!mapEl) return;
+  if (mapEl._leaflet_id && window.map) {
+    window.map.invalidateSize();
+    return;
+  }
+
   // Fallback default coordinates: Dhaka, Bangladesh [23.8103, 90.4125], zoom 13
   const defaultCoords = [23.8103, 90.4125];
 
-  map = L.map("map", {
-    center: defaultCoords,
-    zoom: 13,
-    zoomControl: false,
-    attributionControl: true
-  });
-  window.map = map;
+  try {
+    map = L.map("map", {
+      center: defaultCoords,
+      zoom: 13,
+      zoomControl: false,
+      attributionControl: true
+    });
+    window.map = map;
+  } catch (err) {
+    if (String(err).includes("already initialized") && window.map) {
+      window.map.invalidateSize();
+      return;
+    }
+    console.error("Leaflet Map init error:", err);
+    return;
+  }
 
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -1789,9 +1817,8 @@ function initMap() {
 
   // Invalidate size immediately and after short delay to ensure full rendering
   map.invalidateSize();
-  setTimeout(() => { if (map) map.invalidateSize(); }, 100);
-  setTimeout(() => { if (map) map.invalidateSize(); }, 300);
-  setTimeout(() => { if (map) map.invalidateSize(); }, 600);
+  setTimeout(() => { if (map) map.invalidateSize(); }, 200);
+  setTimeout(() => { if (map) map.invalidateSize(); }, 500);
 }
 
 function createBikerMarkerIcon(riderName, isLeader, speed, heading = 0) {
@@ -2725,18 +2752,14 @@ function initApp() {
 
   // Sim Mode Dev Tools Panel
   if (simModeToggleBtn) {
-    simModeToggleBtn.addEventListener("click", () => {
-      window.toggleSimDevPanel();
+    simModeToggleBtn.addEventListener("click", (e) => {
+      window.toggleSimDevPanel(e);
     });
   }
 
   if (closeSimPanelBtn) {
-    closeSimPanelBtn.addEventListener("click", () => {
-      playSound("click");
-      if (simPanel) {
-        simPanel.classList.add("opacity-0", "pointer-events-none", "translate-y-8");
-        simPanel.classList.remove("opacity-100", "translate-y-0");
-      }
+    closeSimPanelBtn.addEventListener("click", (e) => {
+      window.closeSimDevPanel(e);
     });
   }
 
@@ -2887,6 +2910,9 @@ function initApp() {
   // 3. Initialize Map immediately with Dhaka coordinates so tiles render right away
   try {
     initMap();
+    if (map) {
+      setTimeout(() => map.invalidateSize(), 200);
+    }
   } catch (err) {
     console.warn("Leaflet Map init error handled:", err);
   }

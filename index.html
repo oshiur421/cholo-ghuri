@@ -112,21 +112,32 @@
         window.map.invalidateSize();
       }
     };
-    // Safe alias mapping so document.getElementById returns the drawer for convoyDrawer, groupDrawer, or ridersDrawer
-    if (typeof document !== "undefined") {
-      var origGetElementById = document.getElementById.bind(document);
-      document.getElementById = function(id) {
-        var el = origGetElementById(id);
-        if (!el) {
-          if (id === "ridersDrawer" || id === "groupDrawer") {
-            el = origGetElementById("convoyDrawer");
-          } else if (id === "convoyDrawer") {
-            el = origGetElementById("ridersDrawer") || origGetElementById("groupDrawer");
-          }
-        }
-        return el;
-      };
-    }
+    window.closeSimDevPanel = function(e) {
+      if (e) e.stopPropagation();
+      const panel = document.getElementById('simPanel');
+      if (panel) {
+        panel.classList.add('hidden');
+        panel.style.setProperty('display', 'none', 'important');
+        panel.style.setProperty('opacity', '0', 'important');
+        panel.style.setProperty('pointer-events', 'none', 'important');
+      }
+    };
+
+    window.toggleSimDevPanel = function(e) {
+      if (e) e.stopPropagation();
+      const panel = document.getElementById('simPanel');
+      if (!panel) return;
+      const isHidden = panel.classList.contains('hidden') || panel.style.display === 'none';
+      if (isHidden) {
+        panel.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
+        panel.style.setProperty('display', 'block', 'important');
+        panel.style.setProperty('opacity', '1', 'important');
+        panel.style.setProperty('pointer-events', 'auto', 'important');
+        panel.style.setProperty('z-index', '99999', 'important');
+      } else {
+        window.closeSimDevPanel();
+      }
+    };
 
     window.openGroupDrawer = function() {
       try {
@@ -145,9 +156,10 @@
         var backdrop = document.getElementById("drawerBackdrop");
         if (backdrop) {
           backdrop.classList.remove("hidden", "pointer-events-none");
-          backdrop.style.display = "block";
-          backdrop.style.opacity = "1";
-          backdrop.style.pointerEvents = "auto";
+          backdrop.classList.add("active", "open");
+          backdrop.style.setProperty("display", "block", "important");
+          backdrop.style.setProperty("opacity", "1", "important");
+          backdrop.style.setProperty("pointer-events", "auto", "important");
         }
         if (typeof evaluateConvoyDistances === "function") evaluateConvoyDistances();
       } catch (e) {
@@ -169,10 +181,11 @@
         }
         var backdrop = document.getElementById("drawerBackdrop");
         if (backdrop) {
+          backdrop.classList.remove("active", "open");
           backdrop.classList.add("hidden", "pointer-events-none");
-          backdrop.style.display = "none";
-          backdrop.style.opacity = "0";
-          backdrop.style.pointerEvents = "none";
+          backdrop.style.setProperty("display", "none", "important");
+          backdrop.style.setProperty("opacity", "0", "important");
+          backdrop.style.setProperty("pointer-events", "none", "important");
         }
       } catch (e) {
         console.warn("closeGroupDrawer notice:", e);
@@ -216,9 +229,10 @@
           var backdrop = document.getElementById("drawerBackdrop");
           if (backdrop) {
             backdrop.classList.remove("hidden", "pointer-events-none");
-            backdrop.style.display = "block";
-            backdrop.style.opacity = "1";
-            backdrop.style.pointerEvents = "auto";
+            backdrop.classList.add("active", "open");
+            backdrop.style.setProperty("display", "block", "important");
+            backdrop.style.setProperty("opacity", "1", "important");
+            backdrop.style.setProperty("pointer-events", "auto", "important");
           }
           if (typeof evaluateConvoyDistances === "function") evaluateConvoyDistances();
         } else {
@@ -232,7 +246,7 @@
 
     // Universal Touch & Click Event Binding for mobile phones and desktop
     function setupGroupButtonTriggers() {
-      var groupBtns = document.querySelectorAll('#topRidersCountBtn, #topRightGroupBtn, #openRidersDrawerBtn, .group-trigger-btn');
+      var groupBtns = document.querySelectorAll('#topRidersCountBtn, .group-trigger-btn');
       groupBtns.forEach(function(btn) {
         if (!btn) return;
         btn.style.pointerEvents = 'auto';
@@ -258,7 +272,7 @@
 <body class="bg-cyber-dark text-slate-100 flex flex-col h-screen w-screen overflow-hidden select-none">
 
   <!-- ==================== LEAFLET MAP CONTAINER ==================== -->
-  <div id="map" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1;" class="fixed inset-0 z-[1] w-screen h-screen"></div>
+  <div id="map" style="position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 1; background: #0b0f17;" class="fixed inset-0 z-[1] w-screen h-screen"></div>
 
   <!-- ==================== TOP FLOATING HUD BAR ==================== -->
   <header class="hud-top-bar fixed top-0 left-0 right-0 z-[10000] p-1.5 sm:p-3 pointer-events-none w-full max-w-full overflow-x-hidden" style="pointer-events: none !important; z-index: 10000 !important;">
@@ -321,10 +335,9 @@
             </div>
           </div>
 
-          <!-- Top-Right Group Badge Button (Desktop/Tablet) -->
-          <button id="topRightGroupBtn" onclick="window.toggleGroupDrawer && window.toggleGroupDrawer()" title="Open Group Riders Drawer" class="group-trigger-btn hidden sm:flex glass-panel-neon hover:border-emerald-400 active:scale-95 rounded-xl sm:rounded-2xl px-2.5 py-1.5 sm:px-3 sm:py-2 items-center gap-1.5 border border-emerald-500/40 text-slate-200 transition-all shadow-2xl cursor-pointer pointer-events-auto flex-shrink-0 whitespace-nowrap" style="pointer-events: auto !important; position: relative; z-index: 10010; touch-action: manipulation;">
-            <span class="radar-beacon w-2 h-2 rounded-full bg-neon-green pointer-events-none"></span>
-            <span class="font-cyber font-bold text-xs uppercase tracking-wider pointer-events-none">GROUP (<span id="topRightRidersCount" class="pointer-events-none">1</span>)</span>
+          <!-- Top-Right Group Badge Button (Removed/Hidden to avoid duplicates) -->
+          <button id="topRightGroupBtn" class="hidden" style="display: none !important; pointer-events: none !important;" aria-hidden="true" tabindex="-1">
+            <span id="topRightRidersCount">1</span>
           </button>
         </div>
 
@@ -415,14 +428,13 @@
     </div>
   </div>
 
-  <!-- ==================== LEFT FLOATING RIDERS BUTTON (DESKTOP) ==================== -->
-  <button id="openRidersDrawerBtn" onclick="window.toggleGroupDrawer && window.toggleGroupDrawer()" title="Open Convoy Riders List" class="group-trigger-btn hidden md:flex fixed left-4 top-28 z-[1050] glove-btn glass-panel-neon hover:scale-105 active:scale-95 rounded-2xl px-3 py-2.5 items-center gap-2 border border-emerald-500/40 text-slate-200 transition-all shadow-2xl cursor-pointer pointer-events-auto" style="pointer-events: auto !important; position: fixed; z-index: 1050; touch-action: manipulation;">
-    <i class="fa-solid fa-users text-neon-green text-sm pointer-events-none"></i>
-    <span class="font-cyber font-bold text-xs uppercase tracking-wider pointer-events-none">Group (<span id="drawerRidersCountBadge" class="pointer-events-none">1</span>)</span>
+  <!-- ==================== LEFT FLOATING RIDERS BUTTON (Removed to avoid duplicate) ==================== -->
+  <button id="openRidersDrawerBtn" class="hidden" style="display: none !important; pointer-events: none !important;" aria-hidden="true" tabindex="-1">
+    <span id="drawerRidersCountBadge">1</span>
   </button>
 
   <!-- ==================== MOBILE DRAWER BACKDROP OVERLAY ==================== -->
-  <div id="drawerBackdrop" class="hidden fixed inset-0 z-[99990] bg-black/65 backdrop-blur-sm transition-opacity duration-300" onclick="window.closeGroupDrawer ? window.closeGroupDrawer() : (window.toggleGroupDrawer && window.toggleGroupDrawer(false))" style="display: none; opacity: 0; pointer-events: none;"></div>
+  <div id="drawerBackdrop" class="hidden fixed inset-0 z-[99990] bg-black/65 backdrop-blur-sm transition-opacity duration-300" onclick="window.closeGroupDrawer ? window.closeGroupDrawer() : (window.toggleGroupDrawer && window.toggleGroupDrawer(false))" style="display: none !important; opacity: 0; pointer-events: none;"></div>
 
   <!-- ==================== LEFT COLLAPSIBLE GROUP RIDERS DRAWER ==================== -->
   <aside id="convoyDrawer" data-group-drawer="true" data-alias="ridersDrawer groupDrawer" class="hidden -translate-x-full glass-panel-neon flex flex-col border-r border-emerald-500/30 shadow-[0_0_50px_rgba(0,0,0,0.95)]" style="display: none; transform: translateX(-100%); pointer-events: none;">
@@ -534,13 +546,13 @@
   </div>
 
   <!-- ==================== DEV / SIMULATION PANEL (PC TESTING SUITE) ==================== -->
-  <div id="simPanel" class="fixed right-3 sm:right-6 bottom-24 sm:bottom-28 z-[1200] w-84 max-w-[90vw] glass-panel-neon rounded-2xl p-4 transition-all duration-300 shadow-2xl">
+  <div id="simPanel" class="hidden fixed right-3 sm:right-6 bottom-24 sm:bottom-28 z-[1200] w-84 max-w-[90vw] glass-panel-neon rounded-2xl p-4 transition-all duration-300 shadow-2xl" style="display: none;">
     <div class="flex items-center justify-between border-b border-emerald-500/20 pb-2 mb-3">
       <div class="flex items-center gap-2 text-neon-green font-cyber font-bold text-sm">
         <i class="fa-solid fa-laptop-code"></i>
         <span>PC SIMULATOR & DEV TOOLS</span>
       </div>
-      <button id="closeSimPanelBtn" class="text-slate-400 hover:text-white text-xs p-1">
+      <button id="closeSimPanelBtn" onclick="window.closeSimDevPanel(event)" class="text-slate-400 hover:text-white text-xs p-1" title="Close Panel">
         <i class="fa-solid fa-xmark"></i>
       </button>
     </div>
@@ -671,7 +683,7 @@
     </button>
 
     <!-- Sim Mode Dev Button -->
-    <button id="simModeToggleBtn" onclick="window.toggleSimDevPanel && window.toggleSimDevPanel()" title="Toggle Sim Mode (Dev Tools)" class="glove-btn glass-panel hover:glass-panel-neon active:scale-95 rounded-xl sm:rounded-2xl px-2 sm:px-3.5 py-2 sm:py-3 flex items-center justify-center gap-1 border border-slate-700/80 hover:border-emerald-500/60 transition-all shadow-xl cursor-pointer pointer-events-auto flex-1 sm:flex-initial">
+    <button id="simModeToggleBtn" onclick="window.toggleSimDevPanel(event)" title="Toggle Sim Mode (Dev Tools)" class="glove-btn glass-panel hover:glass-panel-neon active:scale-95 rounded-xl sm:rounded-2xl px-2 sm:px-3.5 py-2 sm:py-3 flex items-center justify-center gap-1 border border-slate-700/80 hover:border-emerald-500/60 transition-all shadow-xl cursor-pointer pointer-events-auto flex-1 sm:flex-initial">
       <i class="fa-solid fa-sliders text-amber-400 text-xs sm:text-sm"></i>
       <span class="hidden md:inline font-cyber font-bold text-xs text-slate-300">SIM DEV</span>
     </button>

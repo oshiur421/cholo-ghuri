@@ -222,12 +222,11 @@ body {
 /* Leaflet Custom Elements */
 #map {
   position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
+  inset: 0 !important;
   width: 100vw !important;
   height: 100vh !important;
   height: 100dvh !important;
-  background-color: #070a0f !important;
+  background: #0b0f17 !important;
   z-index: 1 !important;
 }
 
@@ -298,8 +297,6 @@ body {
 }
 
 #topRidersCountBtn,
-#topRightGroupBtn,
-#openRidersDrawerBtn,
 .group-trigger-btn {
   pointer-events: auto !important;
   position: relative !important;
@@ -312,15 +309,16 @@ body {
 }
 
 #topRidersCountBtn *,
-#topRightGroupBtn *,
-#openRidersDrawerBtn *,
 .group-trigger-btn * {
   pointer-events: none !important;
 }
 
-#openRidersDrawerBtn {
-  position: fixed !important;
-  z-index: 1050 !important;
+/* Hide duplicate group buttons completely */
+#openRidersDrawerBtn,
+#topRightGroupBtn {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
 #ridersDrawer,
@@ -332,7 +330,14 @@ body {
 
 #simPanel {
   position: fixed !important;
-  z-index: 1200 !important;
+  z-index: 99999 !important;
+}
+
+#simPanel.hidden,
+#simPanel[style*="display: none"] {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 #convoyAlertBanner,
@@ -858,6 +863,9 @@ body {
 }
 
 #drawerBackdrop {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
   position: fixed;
   inset: 0;
   background-color: rgba(0, 0, 0, 0.65);
@@ -865,11 +873,12 @@ body {
   -webkit-backdrop-filter: blur(4px);
   z-index: 99990;
   transition: opacity 0.3s ease;
-  pointer-events: none;
 }
 
 #drawerBackdrop.active,
-#drawerBackdrop:not(.hidden) {
+#drawerBackdrop.open {
+  display: block !important;
+  opacity: 1 !important;
   pointer-events: auto !important;
 }
 
