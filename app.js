@@ -454,6 +454,9 @@ window.openReportPoliceModal = function() {
     if (policeConfirmModal) {
       policeConfirmModal.classList.remove("hidden");
     }
+    if (!window.pendingPolicePhotoData) {
+      if (typeof clearPendingPolicePhoto === "function") clearPendingPolicePhoto();
+    }
   } catch (err) {
     console.warn("Open report police modal notice:", err);
   }
@@ -852,44 +855,209 @@ function calculateDistanceKm(lat1, lon1, lat2, lon2) {
 // ==========================================
 // 6. CROWDSOURCED POLICE RADAR & REPORTING
 // ==========================================
+window.pendingPolicePhotoData = null;
+
+function handlePolicePhotoSelected(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = function() {
+      // HTML5 Canvas auto-compression: max width/height 480px, JPEG quality 0.6
+      const maxDim = 480;
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > maxDim) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        }
+      } else {
+        if (height > maxDim) {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, width, height);
+
+      const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.6);
+      window.pendingPolicePhotoData = compressedDataUrl;
+
+      const previewImg = document.getElementById("policePhotoPreview");
+      const previewContainer = document.getElementById("policePhotoPreviewContainer");
+      const triggerBtn = document.getElementById("triggerPolicePhotoBtn");
+
+      if (previewImg) previewImg.src = compressedDataUrl;
+      if (previewContainer) previewContainer.classList.remove("hidden");
+      if (triggerBtn) {
+        triggerBtn.innerHTML = '<i class="fa-solid fa-arrows-rotate text-cyan-400 text-sm"></i><span>Retake / Change Photo</span>';
+      }
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearPendingPolicePhoto() {
+  window.pendingPolicePhotoData = null;
+  const photoInput = document.getElementById("policePhotoInput");
+  const previewImg = document.getElementById("policePhotoPreview");
+  const previewContainer = document.getElementById("policePhotoPreviewContainer");
+  const triggerBtn = document.getElementById("triggerPolicePhotoBtn");
+
+  if (photoInput) photoInput.value = "";
+  if (previewImg) previewImg.src = "";
+  if (previewContainer) previewContainer.classList.add("hidden");
+  if (triggerBtn) {
+    triggerBtn.innerHTML = '<i class="fa-solid fa-camera text-cyan-400 text-sm"></i><span>Take / Add Checkpost Photo (Optional)</span>';
+  }
+}
+
+window.openPolicePhotoViewer = function(src) {
+  if (!src) return;
+  const modal = document.getElementById("policePhotoViewerModal");
+  const img = document.getElementById("policePhotoViewerImg");
+  if (img) img.src = src;
+  if (modal) {
+    modal.classList.remove("hidden");
+    modal.style.display = "flex";
+  }
+};
+
+window.closePolicePhotoViewer = function() {
+  const modal = document.getElementById("policePhotoViewerModal");
+  const img = document.getElementById("policePhotoViewerImg");
+  if (modal) {
+    modal.classList.add("hidden");
+    modal.style.display = "none";
+  }
+  if (img) img.src = "";
+};
+
+function createPolicePopupHtml(report) {
+  const reporter = escapeHtml(report.reported_by || "Biker");
+  const timeStr = report.created_at
+    ? new Date(report.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : "Just now";
+
+  const photoHtml = report.photo_data
+    ? `
+    <div class="mt-2 relative">
+      <img 
+        src="${report.photo_data}" 
+        alt="Police Checkpost" 
+        class="police-popup-photo" 
+        onclick="window.openPolicePhotoViewer('${report.photo_data}')"
+        title="Tap to view full screen"
+      />
+      <div class="text-[9px] text-cyan-300 flex items-center justify-center gap-1 mt-1 font-mono">
+        <i class="fa-solid fa-expand text-[8px]"></i> Tap to view full screen
+      </div>
+    </div>
+  `
+    : "";
+
+  return `
+    <div class="text-slate-100 text-xs">
+      <div class="flex items-center gap-2 border-b border-red-500/30 pb-1.5 mb-2 font-cyber font-bold text-red-400">
+        <i class="fa-solid fa-shield-halved text-sm animate-pulse"></i>
+        <span>POLICE CHECKPOST</span>
+      </div>
+      <div class="text-[11px] text-slate-300 space-y-0.5">
+        <div>Reported by: <span class="font-bold text-cyan-300">${reporter}</span></div>
+        <div class="text-[10px] text-slate-400 flex items-center justify-between">
+          <span>Time: ${timeStr}</span>
+          <span class="text-emerald-400 font-bold">👍 ${report.true_votes || 1} | 👎 ${report.false_votes || 0}</span>
+        </div>
+      </div>
+      ${photoHtml}
+      <button 
+        type="button" 
+        onclick="window.openVerifyPoliceModal('${report.id}')"
+        class="w-full mt-2.5 py-1.5 px-2 rounded-lg bg-red-600/90 hover:bg-red-500 text-white font-cyber font-bold text-[10px] uppercase flex items-center justify-center gap-1.5 shadow transition-all active:scale-95 cursor-pointer"
+      >
+        <i class="fa-solid fa-check-to-slot"></i>
+        <span>Verify Checkpost</span>
+      </button>
+    </div>
+  `;
+}
+
 async function reportPoliceCheckpost() {
   const reporterName = currentSession.riderName || "Rider";
+  const photoData = window.pendingPolicePhotoData || null;
+
   const newReport = {
     id: generateUUID(),
     lat: riderLocation.lat,
     lng: riderLocation.lng,
     reported_by: reporterName,
+    photo_data: photoData,
     true_votes: 1,
     false_votes: 0,
     created_at: new Date().toISOString()
   };
 
   addOrUpdatePoliceMarker(newReport);
-  showRadarToast("🚓 POLICE RADAR BROADCAST", "Police Checkpost Reported on Map!");
+  showRadarToast("🚓 POLICE RADAR BROADCAST", "Police Checkpost Reported on Map!" + (photoData ? " (Photo Attached)" : ""));
   playSound("police");
 
   if (realtimeChannel) {
-    realtimeChannel.send({
-      type: "broadcast",
-      event: "police_alert",
-      payload: newReport
-    });
+    try {
+      realtimeChannel.send({
+        type: "broadcast",
+        event: "police_alert",
+        payload: newReport
+      });
+    } catch (bcErr) {
+      console.debug("[Police broadcast note]", bcErr);
+    }
   }
 
   if (sbClient) {
     try {
-      const { data, error } = await sbClient
+      // 1. Attempt insert with photo_data
+      const payloadWithPhoto = {
+        lat: newReport.lat,
+        lng: newReport.lng,
+        reported_by: newReport.reported_by,
+        true_votes: 1,
+        false_votes: 0,
+        created_at: newReport.created_at,
+        photo_data: photoData
+      };
+
+      let { data, error } = await sbClient
         .from("police_reports")
-        .insert({
+        .insert(payloadWithPhoto)
+        .select()
+        .single();
+
+      // 2. Fallback if column 'photo_data' does not exist in schema (HTTP 400 / PostgREST column missing)
+      if (error && (error.code === "PGRST204" || (error.message && error.message.includes("photo_data")) || error.status === 400)) {
+        console.warn("[police_reports] photo_data column missing in DB schema, fallback to insert without photo_data:", error.message);
+        const payloadWithoutPhoto = {
           lat: newReport.lat,
           lng: newReport.lng,
           reported_by: newReport.reported_by,
           true_votes: 1,
           false_votes: 0,
           created_at: newReport.created_at
-        })
-        .select()
-        .single();
+        };
+        const fallbackRes = await sbClient
+          .from("police_reports")
+          .insert(payloadWithoutPhoto)
+          .select()
+          .single();
+        data = fallbackRes.data;
+        error = fallbackRes.error;
+      }
 
       if (!error && data && data.id) {
         if (newReport.id !== data.id) {
@@ -909,6 +1077,8 @@ async function reportPoliceCheckpost() {
     }
   }
 
+  // Clear pending photo and preview UI after submit
+  clearPendingPolicePhoto();
   evaluatePoliceProximity();
 }
 
@@ -989,6 +1159,12 @@ function addOrUpdatePoliceMarker(report) {
     const existing = policeReportsMap.get(reportId);
     existing.true_votes = report.true_votes || existing.true_votes || 1;
     existing.false_votes = report.false_votes || existing.false_votes || 0;
+    if (report.photo_data && !existing.photo_data) {
+      existing.photo_data = report.photo_data;
+      if (existing.marker) {
+        existing.marker.bindPopup(createPolicePopupHtml(existing), { className: "police-custom-popup", maxWidth: 260 });
+      }
+    }
     return;
   }
 
@@ -1008,8 +1184,9 @@ function addOrUpdatePoliceMarker(report) {
 
   const marker = L.marker([report.lat, report.lng], { icon: policeIcon, zIndexOffset: 2000 }).addTo(map);
 
+  // Requirement 1: Red zone radius reduced to 1/3rd (160m instead of 300-500m)
   const circle = L.circle([report.lat, report.lng], {
-    radius: 300,
+    radius: 160,
     color: "#ff1e42",
     fillColor: "#ff1e42",
     fillOpacity: 0.16,
@@ -1017,9 +1194,12 @@ function addOrUpdatePoliceMarker(report) {
     dashArray: "6, 6"
   }).addTo(map);
 
+  // Requirement 3: Bind custom popup with photo and verify button
+  marker.bindPopup(createPolicePopupHtml(report), { className: "police-custom-popup", maxWidth: 260 });
+
   marker.on("click", () => {
     playSound("click");
-    openVerifyPoliceModal(reportId);
+    marker.openPopup();
   });
 
   circle.on("click", () => {
@@ -1112,6 +1292,17 @@ function openVerifyPoliceModal(reportId) {
   const trueBarEl = document.getElementById("verifyTrueBar");
   const falseBarEl = document.getElementById("verifyFalseBar");
 
+  // Show checkpost photo in verify modal if available
+  const photoContainer = document.getElementById("verifyPolicePhotoContainer");
+  const photoEl = document.getElementById("verifyPolicePhoto");
+  if (report.photo_data) {
+    if (photoEl) photoEl.src = report.photo_data;
+    if (photoContainer) photoContainer.classList.remove("hidden");
+  } else {
+    if (photoEl) photoEl.src = "";
+    if (photoContainer) photoContainer.classList.add("hidden");
+  }
+
   const distKm = calculateDistanceKm(riderLocation.lat, riderLocation.lng, report.lat, report.lng);
   const distText = distKm < 1 ? `${Math.round(distKm * 1000)}m away` : `${distKm.toFixed(1)} km away`;
 
@@ -1140,9 +1331,16 @@ function openVerifyPoliceModal(reportId) {
   }
 }
 
+window.openVerifyPoliceModal = openVerifyPoliceModal;
+
 function closeVerifyPoliceModal() {
   activeVerifyReportId = null;
   const modal = document.getElementById("verifyPoliceModal");
+  const photoContainer = document.getElementById("verifyPolicePhotoContainer");
+  const photoEl = document.getElementById("verifyPolicePhoto");
+  if (photoEl) photoEl.src = "";
+  if (photoContainer) photoContainer.classList.add("hidden");
+
   if (!modal) return;
   modal.classList.add("opacity-0", "pointer-events-none");
   setTimeout(() => {
@@ -3420,10 +3618,41 @@ function initApp() {
     });
   }
 
+  // Camera / Photo Upload in Police Confirm Modal
+  const policePhotoInput = document.getElementById("policePhotoInput");
+  if (policePhotoInput) {
+    policePhotoInput.addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (file) {
+        handlePolicePhotoSelected(file);
+      }
+    });
+  }
+
+  const removePolicePhotoBtn = document.getElementById("removePolicePhotoBtn");
+  if (removePolicePhotoBtn) {
+    removePolicePhotoBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      playSound("click");
+      clearPendingPolicePhoto();
+    });
+  }
+
+  // Police Photo Viewer Lightbox backdrop click to close
+  const policePhotoViewerModal = document.getElementById("policePhotoViewerModal");
+  if (policePhotoViewerModal) {
+    policePhotoViewerModal.addEventListener("click", (e) => {
+      if (e.target === policePhotoViewerModal) {
+        window.closePolicePhotoViewer();
+      }
+    });
+  }
+
   if (cancelPoliceReportBtn) {
     cancelPoliceReportBtn.addEventListener("click", () => {
       playSound("click");
       if (policeConfirmModal) policeConfirmModal.classList.add("hidden");
+      clearPendingPolicePhoto();
     });
   }
 

@@ -690,14 +690,48 @@
         <i class="fa-solid fa-shield-halved"></i>
       </div>
       <h3 class="font-cyber font-black text-lg text-white uppercase tracking-wider">CONFIRM POLICE CHECKPOST</h3>
-      <p class="text-xs text-slate-300 mt-1 mb-4">
+      <p class="text-xs text-slate-300 mt-1 mb-3">
         Broadcast real-time radar alert to all riders in convoy <span id="confirmRoomCodeSpan" class="font-hud text-neon-green font-bold">----</span>?
       </p>
+
+      <!-- Glove-friendly Camera / Photo Section -->
+      <div class="mb-4 text-left">
+        <input type="file" id="policePhotoInput" accept="image/*" capture="environment" class="hidden">
+        
+        <!-- Add Photo Trigger Button -->
+        <button 
+          type="button" 
+          id="triggerPolicePhotoBtn" 
+          onclick="document.getElementById('policePhotoInput').click()" 
+          class="w-full py-2.5 px-3 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700 hover:border-cyan-400 text-slate-200 text-xs font-cyber font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md cursor-pointer"
+        >
+          <i class="fa-solid fa-camera text-cyan-400 text-sm"></i>
+          <span>Take / Add Checkpost Photo (Optional)</span>
+        </button>
+
+        <!-- Photo Preview Container (Hidden initially) -->
+        <div id="policePhotoPreviewContainer" class="hidden mt-2 relative rounded-xl overflow-hidden border border-cyan-500/40 bg-slate-950/90 p-1.5 shadow-lg">
+          <img id="policePhotoPreview" src="" alt="Checkpost Preview" class="w-full h-32 object-cover rounded-lg">
+          <div class="mt-1.5 flex items-center justify-between px-1 text-[10px] text-slate-300 font-cyber">
+            <span class="flex items-center gap-1 text-cyan-300 font-mono">
+              <i class="fa-solid fa-image"></i> Photo Attached
+            </span>
+            <button 
+              type="button" 
+              id="removePolicePhotoBtn" 
+              class="text-rose-400 hover:text-rose-300 font-bold flex items-center gap-1 active:scale-90 transition-transform cursor-pointer"
+            >
+              <i class="fa-solid fa-xmark"></i> Remove Photo
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div class="grid grid-cols-2 gap-3">
-        <button id="cancelPoliceReportBtn" class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-cyber font-bold text-xs uppercase border border-slate-700">
+        <button id="cancelPoliceReportBtn" class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-cyber font-bold text-xs uppercase border border-slate-700 cursor-pointer">
           Cancel
         </button>
-        <button id="confirmPoliceReportBtn" class="py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white font-cyber font-bold text-xs uppercase shadow-lg shadow-red-600/40">
+        <button id="confirmPoliceReportBtn" class="py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white font-cyber font-bold text-xs uppercase shadow-lg shadow-red-600/40 cursor-pointer">
           Broadcast Alert
         </button>
       </div>
@@ -706,7 +740,7 @@
 
   <!-- ==================== VERIFY POLICE CHECKPOST MODAL ==================== -->
   <div id="verifyPoliceModal" class="verify-police-modal hidden opacity-0 pointer-events-none">
-    <div class="verify-police-card text-center">
+    <div class="verify-police-card text-center max-h-[90vh] overflow-y-auto">
       <!-- Flashing Red/Blue Shield Icon -->
       <div class="w-14 h-14 rounded-2xl bg-slate-900 border-2 border-red-500 mx-auto flex items-center justify-center text-red-500 text-2xl mb-3 shadow-[0_0_25px_rgba(255,30,66,0.4)]">
         <i class="fa-solid fa-shield-halved animate-pulse"></i>
@@ -717,6 +751,21 @@
       <p id="verifyReportMeta" class="text-xs text-slate-400 mt-1 mb-3">
         Reported by <strong id="verifyReporterName" class="text-cyan-300 font-bold">Sakib</strong> • <span id="verifyDistanceText" class="text-slate-300">120m away</span>
       </p>
+
+      <!-- Checkpost Photo in Verify Modal -->
+      <div id="verifyPolicePhotoContainer" class="hidden mb-3">
+        <img 
+          id="verifyPolicePhoto" 
+          src="" 
+          alt="Checkpost Photo" 
+          onclick="if(this.src) window.openPolicePhotoViewer(this.src)" 
+          class="max-h-40 w-full object-cover rounded-xl border border-red-500/40 cursor-pointer shadow-lg hover:border-cyan-400 transition-colors"
+          title="Tap to view full screen"
+        >
+        <div class="text-[10px] text-slate-400 flex items-center justify-center gap-1 mt-1 font-mono">
+          <i class="fa-solid fa-expand text-[9px] text-cyan-300"></i> Tap photo for full screen
+        </div>
+      </div>
 
       <!-- Score & Ratio Progress Bar -->
       <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 mb-4">
@@ -755,9 +804,32 @@
       </div>
 
       <!-- Close Button -->
-      <button id="closeVerifyModalBtn" class="mt-4 text-xs text-slate-400 hover:text-white uppercase font-cyber font-bold tracking-wider py-1 px-3">
+      <button id="closeVerifyModalBtn" class="mt-4 text-xs text-slate-400 hover:text-white uppercase font-cyber font-bold tracking-wider py-1 px-3 cursor-pointer">
         Dismiss / Close
       </button>
+    </div>
+  </div>
+
+  <!-- ==================== POLICE PHOTO LIGHTBOX VIEWER ==================== -->
+  <div id="policePhotoViewerModal" class="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md hidden transition-all duration-300">
+    <div class="relative max-w-lg w-full bg-slate-900 border border-slate-700 rounded-2xl p-3 shadow-2xl flex flex-col items-center">
+      <button 
+        type="button" 
+        onclick="window.closePolicePhotoViewer()" 
+        class="absolute -top-3 -right-3 w-9 h-9 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center font-bold shadow-lg text-sm z-10 active:scale-95 cursor-pointer"
+        title="Close Photo Viewer"
+      >
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <div class="w-full flex items-center justify-between px-2 pb-2 border-b border-slate-800 text-xs font-cyber text-slate-300">
+        <span class="flex items-center gap-1.5 text-rose-400 font-bold">
+          <i class="fa-solid fa-shield-halved"></i> Police Checkpost Photo
+        </span>
+        <span class="text-[10px] text-slate-500">Tap outside or ✕ to close</span>
+      </div>
+      <div class="w-full overflow-hidden rounded-xl mt-2 flex items-center justify-center bg-black/70 max-h-[70vh]">
+        <img id="policePhotoViewerImg" src="" alt="Police Checkpost" class="w-full max-h-[70vh] object-contain rounded-xl">
+      </div>
     </div>
   </div>
 
