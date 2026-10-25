@@ -1290,7 +1290,6 @@ function evaluatePoliceProximity() {
     closestApproachingPolice = closest;
     const distFormatted = minDistanceKm < 1 ? `${Math.round(minDistanceKm * 1000)} meters` : `${minDistanceKm.toFixed(1)} km`;
 
-    if (banner) banner.classList.remove("hidden");
     if (bannerText) {
       bannerText.textContent = `🚓 POLICE CHECKPOST AHEAD (${distFormatted} away) - Reported by ${closest.reported_by || "Biker"}`;
     }
@@ -1301,17 +1300,16 @@ function evaluatePoliceProximity() {
       speakAnnouncement(`Police checkpost ahead, ${distFormatted} away, reported by ${closest.reported_by || "Biker"}.`);
     }
 
-    // Within 160m red zone: Show Minimized Round Icon in #miniAlertDock (do NOT open big modal automatically!)
-    if (minDistanceKm <= VERIFY_POLICE_TRIGGER_DISTANCE_KM) {
-      if (!window.isAlertDismissed(closest.id)) {
-        showMiniPoliceAlert(closest, minDistanceKm);
-      }
-    } else if (minDistanceKm > 0.35) {
-      hideMiniPoliceAlert(closest.id);
+    // Default: Show Minimized Round Icon in #miniAlertDock (do NOT open big banner automatically!)
+    const radarAlertId = `radar_banner_${closest.id}`;
+    if (!window.isAlertDismissed(radarAlertId) && !window.isAlertDismissed(closest.id)) {
+      showMiniRadarAlert(closest, minDistanceKm);
     }
   } else {
     closestApproachingPolice = null;
     if (banner) banner.classList.add("hidden");
+    hideMiniRadarAlert(closest ? closest.id : null);
+    hideMiniPoliceAlert(closest ? closest.id : null);
   }
 }
 
@@ -1525,6 +1523,205 @@ window.expandMiniRoadAlert = function(alertId) {
   openRoadTransitionModal();
 };
 
+// ==========================================
+// RADAR ALERT (HIGHWAY POLICE RADAR) HANDLERS
+// ==========================================
+function showMiniRadarAlert(report, distKm) {
+  if (!report || !report.id) return;
+  const alertId = `radar_banner_${report.id}`;
+  if (window.isAlertDismissed(alertId) || window.isAlertDismissed(report.id)) return;
+
+  const dock = document.getElementById("miniAlertDock");
+  if (!dock) return;
+
+  const itemId = `miniAlertItem_radar_${report.id}`;
+  let item = document.getElementById(itemId);
+
+  const distMeters = Math.round((distKm !== undefined && distKm !== null ? distKm : 0.05) * 1000);
+  const distLabel = distKm !== undefined && distKm < 1 ? `${distMeters}m` : `${distKm.toFixed(1)}km`;
+
+  if (!item) {
+    item = document.createElement("div");
+    item.id = itemId;
+    item.className = "mini-alert-item mini-alert-popin";
+    item.innerHTML = `
+      <button 
+        type="button" 
+        class="mini-alert-btn radar-alert" 
+        onclick="window.expandMiniRadarAlert('${report.id}')"
+        title="Highway Police Radar Alert (${distLabel} away) - Tap to View Details"
+      >
+        <i class="fa-solid fa-shield-halved text-xl text-white"></i>
+        <span class="mini-alert-badge badge-radar" id="miniRadarBadge_${report.id}">${distLabel}</span>
+      </button>
+      <button 
+        type="button" 
+        class="mini-alert-close" 
+        onclick="window.dismissMiniAlert('radar_banner', 'radar_banner_${report.id}', event)" 
+        title="Permanently Dismiss (Cross)"
+      >&times;</button>
+    `;
+    dock.appendChild(item);
+  } else {
+    const badge = document.getElementById(`miniRadarBadge_${report.id}`);
+    if (badge) badge.textContent = distLabel;
+  }
+}
+window.showMiniRadarAlert = showMiniRadarAlert;
+
+function hideMiniRadarAlert(reportId) {
+  const dock = document.getElementById("miniAlertDock");
+  if (!dock) return;
+  if (reportId) {
+    const item = document.getElementById(`miniAlertItem_radar_${reportId}`);
+    if (item) {
+      item.classList.add("mini-alert-popout");
+      setTimeout(() => { if (item && item.parentNode) item.parentNode.removeChild(item); }, 200);
+    }
+  } else {
+    const radarItems = dock.querySelectorAll("[id^='miniAlertItem_radar_']");
+    radarItems.forEach(el => {
+      el.classList.add("mini-alert-popout");
+      setTimeout(() => { if (el && el.parentNode) el.parentNode.removeChild(el); }, 200);
+    });
+  }
+}
+window.hideMiniRadarAlert = hideMiniRadarAlert;
+
+window.expandMiniRadarAlert = function(reportId) {
+  const report = policeReportsMap.get(reportId) || closestApproachingPolice;
+  const banner = document.getElementById("approachingPoliceBanner");
+  const bannerText = document.getElementById("approachingPoliceText");
+  if (report) {
+    closestApproachingPolice = report;
+    const distKm = report.distanceToBiker || calculateDistanceKm(riderLocation.lat, riderLocation.lng, report.lat, report.lng);
+    const distFormatted = distKm < 1 ? `${Math.round(distKm * 1000)} meters` : `${distKm.toFixed(1)} km`;
+    if (bannerText) {
+      bannerText.textContent = `🚓 POLICE CHECKPOST AHEAD (${distFormatted} away) - Reported by ${report.reported_by || "Biker"}`;
+    }
+  }
+  if (banner) {
+    banner.classList.remove("hidden");
+  }
+};
+
+function minimizeApproachingPoliceAlert() {
+  const banner = document.getElementById("approachingPoliceBanner");
+  if (banner) banner.classList.add("hidden");
+  // Round icon remains docked!
+}
+window.minimizeApproachingPoliceAlert = minimizeApproachingPoliceAlert;
+
+function dismissApproachingPoliceAlert() {
+  if (closestApproachingPolice && closestApproachingPolice.id) {
+    const rawId = closestApproachingPolice.id;
+    markAlertAsDismissed(`radar_banner_${rawId}`);
+    markAlertAsDismissed(rawId);
+    hideMiniRadarAlert(rawId);
+  }
+  const banner = document.getElementById("approachingPoliceBanner");
+  if (banner) banner.classList.add("hidden");
+}
+window.dismissApproachingPoliceAlert = dismissApproachingPoliceAlert;
+
+// ==========================================
+// CONVOY FORMATION GAP ALERT HANDLERS
+// ==========================================
+function showMiniConvoyGapAlert(rider) {
+  if (!rider || !rider.id) return;
+  const alertId = `convoy_gap_${rider.id}`;
+  if (window.isAlertDismissed(alertId)) return;
+
+  const dock = document.getElementById("miniAlertDock");
+  if (!dock) return;
+
+  const itemId = `miniAlertItem_convoy_${rider.id}`;
+  let item = document.getElementById(itemId);
+
+  const gapKm = rider.distanceToLeader !== undefined ? rider.distanceToLeader : 1.5;
+  const gapLabel = `${gapKm.toFixed(1)}km`;
+
+  if (!item) {
+    item = document.createElement("div");
+    item.id = itemId;
+    item.className = "mini-alert-item mini-alert-popin";
+    item.innerHTML = `
+      <button 
+        type="button" 
+        class="mini-alert-btn convoy-gap-alert" 
+        onclick="window.expandMiniConvoyGapAlert('${rider.id}')"
+        title="Convoy Gap Alert (${escapeHtml(rider.rider_name)} is ${gapLabel} away) - Tap to Locate"
+      >
+        <i class="fa-solid fa-triangle-exclamation text-xl text-yellow-200"></i>
+        <span class="mini-alert-badge badge-gap" id="miniConvoyBadge_${rider.id}">${gapLabel}</span>
+      </button>
+      <button 
+        type="button" 
+        class="mini-alert-close" 
+        onclick="window.dismissMiniAlert('convoy_gap', 'convoy_gap_${rider.id}', event)" 
+        title="Permanently Dismiss (Cross)"
+      >&times;</button>
+    `;
+    dock.appendChild(item);
+  } else {
+    const badge = document.getElementById(`miniConvoyBadge_${rider.id}`);
+    if (badge) badge.textContent = gapLabel;
+  }
+}
+window.showMiniConvoyGapAlert = showMiniConvoyGapAlert;
+
+function hideMiniConvoyGapAlert(riderId) {
+  const dock = document.getElementById("miniAlertDock");
+  if (!dock) return;
+  if (riderId) {
+    const item = document.getElementById(`miniAlertItem_convoy_${riderId}`);
+    if (item) {
+      item.classList.add("mini-alert-popout");
+      setTimeout(() => { if (item && item.parentNode) item.parentNode.removeChild(item); }, 200);
+    }
+  } else {
+    const convoyItems = dock.querySelectorAll("[id^='miniAlertItem_convoy_']");
+    convoyItems.forEach(el => {
+      el.classList.add("mini-alert-popout");
+      setTimeout(() => { if (el && el.parentNode) el.parentNode.removeChild(el); }, 200);
+    });
+  }
+}
+window.hideMiniConvoyGapAlert = hideMiniConvoyGapAlert;
+
+window.expandMiniConvoyGapAlert = function(riderId) {
+  const rider = allConvoyRiders.get(riderId) || activeStragglerAlert;
+  const alertBanner = document.getElementById("convoyAlertBanner");
+  const alertText = document.getElementById("convoyAlertText");
+  if (rider) {
+    activeStragglerAlert = rider;
+    if (alertText) {
+      alertText.textContent = `⚠️ CONVOY ALERT: ${rider.rider_name} is ${rider.distanceToLeader ? rider.distanceToLeader.toFixed(1) : "1.5"} km away from the group!`;
+    }
+  }
+  if (alertBanner) {
+    alertBanner.classList.remove("hidden");
+  }
+};
+
+function minimizeConvoyAlert() {
+  const alertBanner = document.getElementById("convoyAlertBanner");
+  if (alertBanner) alertBanner.classList.add("hidden");
+  // Round icon remains docked!
+}
+window.minimizeConvoyAlert = minimizeConvoyAlert;
+
+function dismissConvoyAlert() {
+  if (activeStragglerAlert && activeStragglerAlert.id) {
+    const rawId = activeStragglerAlert.id;
+    markAlertAsDismissed(`convoy_gap_${rawId}`);
+    hideMiniConvoyGapAlert(rawId);
+  }
+  const alertBanner = document.getElementById("convoyAlertBanner");
+  if (alertBanner) alertBanner.classList.add("hidden");
+}
+window.dismissConvoyAlert = dismissConvoyAlert;
+
 window.dismissMiniAlert = function(type, alertId, event) {
   if (event) {
     event.stopPropagation();
@@ -1540,6 +1737,19 @@ window.dismissMiniAlert = function(type, alertId, event) {
   } else if (type === "road") {
     hideMiniRoadAlert(alertId);
     dismissRoadTransitionPopup();
+  } else if (type === "radar_banner") {
+    const rawId = alertId.replace("radar_banner_", "");
+    markAlertAsDismissed(`radar_banner_${rawId}`);
+    markAlertAsDismissed(rawId);
+    hideMiniRadarAlert(rawId);
+    const banner = document.getElementById("approachingPoliceBanner");
+    if (banner) banner.classList.add("hidden");
+  } else if (type === "convoy_gap") {
+    const rawId = alertId.replace("convoy_gap_", "");
+    markAlertAsDismissed(`convoy_gap_${rawId}`);
+    hideMiniConvoyGapAlert(rawId);
+    const banner = document.getElementById("convoyAlertBanner");
+    if (banner) banner.classList.add("hidden");
   }
 };
 
@@ -1656,7 +1866,6 @@ function evaluateConvoyDistances() {
 
   if (maxStraggler) {
     activeStragglerAlert = maxStraggler;
-    if (alertBanner) alertBanner.classList.remove("hidden");
     if (alertText) {
       alertText.textContent = `⚠️ CONVOY ALERT: ${maxStraggler.rider_name} is ${maxStraggler.distanceToLeader.toFixed(1)} km away from the group!`;
     }
@@ -1666,9 +1875,16 @@ function evaluateConvoyDistances() {
       lastConvoyAlarmTime = now;
       playSound("convoyAlarm");
     }
+
+    // Default: Show Minimized Round Icon in #miniAlertDock (do NOT open big banner automatically!)
+    const convoyAlertId = `convoy_gap_${maxStraggler.id}`;
+    if (!window.isAlertDismissed(convoyAlertId)) {
+      showMiniConvoyGapAlert(maxStraggler);
+    }
   } else {
     activeStragglerAlert = null;
     if (alertBanner) alertBanner.classList.add("hidden");
+    hideMiniConvoyGapAlert();
   }
 
   renderGroupRidersList(leaderRider);
@@ -3782,16 +3998,31 @@ function initApp() {
     });
   }
 
+  // Convoy Straggler Banner Buttons
   if (viewStragglerBtn) {
     viewStragglerBtn.addEventListener("click", () => {
-      if (activeStragglerAlert) window.centerOnRider(activeStragglerAlert.id);
+      if (activeStragglerAlert) {
+        window.centerOnRider(activeStragglerAlert.id);
+        if (map && activeStragglerAlert.lat && activeStragglerAlert.lng) {
+          map.setView([activeStragglerAlert.lat, activeStragglerAlert.lng], 16, { animate: true });
+        }
+      }
+      minimizeConvoyAlert();
+    });
+  }
+
+  const minimizeConvoyAlertBtn = document.getElementById("minimizeConvoyAlertBtn");
+  if (minimizeConvoyAlertBtn) {
+    minimizeConvoyAlertBtn.addEventListener("click", () => {
+      playSound("click");
+      minimizeConvoyAlert();
     });
   }
 
   if (dismissConvoyAlertBtn) {
     dismissConvoyAlertBtn.addEventListener("click", () => {
-      const banner = document.getElementById("convoyAlertBanner");
-      if (banner) banner.classList.add("hidden");
+      playSound("click");
+      dismissConvoyAlert();
     });
   }
 
@@ -3801,13 +4032,22 @@ function initApp() {
       if (closestApproachingPolice) {
         openVerifyPoliceModal(closestApproachingPolice.id);
       }
+      minimizeApproachingPoliceAlert();
+    });
+  }
+
+  const minimizeApproachingBtn = document.getElementById("minimizeApproachingBtn");
+  if (minimizeApproachingBtn) {
+    minimizeApproachingBtn.addEventListener("click", () => {
+      playSound("click");
+      minimizeApproachingPoliceAlert();
     });
   }
 
   if (dismissApproachingBtn) {
     dismissApproachingBtn.addEventListener("click", () => {
-      const banner = document.getElementById("approachingPoliceBanner");
-      if (banner) banner.classList.add("hidden");
+      playSound("click");
+      dismissApproachingPoliceAlert();
     });
   }
 
