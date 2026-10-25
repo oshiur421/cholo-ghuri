@@ -926,6 +926,12 @@ body {
   transform: translateY(1px) scale(0.96);
 }
 
+#leaderNotice {
+  background: rgba(36, 23, 10, 0.9) !important;
+  border: 1px solid rgba(251, 191, 36, 0.45) !important;
+  box-shadow: 0 4px 15px rgba(251, 191, 36, 0.15) !important;
+}
+
 /* ==================== APPROACHING POLICE RADAR ALERT ==================== */
 #approachingPoliceBanner {
   position: fixed;

@@ -55,6 +55,10 @@
         modal.style.opacity = "1";
         modal.style.pointerEvents = "auto";
       }
+      var roomCodeInput = document.getElementById("roomCodeInput");
+      if (roomCodeInput && roomCodeInput.value && typeof window.checkRoomLeaderStatus === "function") {
+        window.checkRoomLeaderStatus(roomCodeInput.value);
+      }
     };
     window.closeJoinModal = function() {
       var modal = document.getElementById("onboardingModal");
@@ -638,7 +642,7 @@
         </div>
 
         <!-- Toggle: I am Ride Leader (Captain) -->
-        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
+        <div id="leaderToggleContainer" class="bg-slate-900/80 border border-slate-800 rounded-xl p-3 flex items-center justify-between transition-all duration-200">
           <div class="flex items-center gap-2.5">
             <div class="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
               <i class="fa-solid fa-crown text-sm"></i>
@@ -650,8 +654,14 @@
           </div>
           <label class="relative inline-flex items-center cursor-pointer">
             <input type="checkbox" id="isLeaderCheckbox" class="sr-only peer">
-            <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-300 after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+            <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-300 after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500 peer-disabled:opacity-40 peer-disabled:cursor-not-allowed"></div>
           </label>
+        </div>
+
+        <!-- Dynamic Notice: Leader already exists in room -->
+        <div id="leaderNotice" class="hidden text-[11px] font-cyber font-semibold text-amber-300 bg-amber-950/50 border border-amber-500/40 rounded-xl px-3 py-2 flex items-center gap-2 -mt-1 shadow-sm transition-all duration-200">
+          <i class="fa-solid fa-crown text-amber-400 text-xs flex-shrink-0"></i>
+          <span id="leaderNoticeText">Leader is already in this room — joining as Rider</span>
         </div>
 
         <!-- Big Neon Action Button -->
