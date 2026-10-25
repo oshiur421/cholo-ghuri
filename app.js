@@ -35,31 +35,11 @@ try {
   console.warn("Immediate map init warning:", e);
 }
 window.closeSimDevPanel = function(e) {
-  if (e) e.stopPropagation();
-  const panel = document.getElementById('simPanel');
-  if (panel) {
-    panel.classList.add('hidden');
-    panel.style.setProperty('display', 'none', 'important');
-    panel.style.setProperty('opacity', '0', 'important');
-    panel.style.setProperty('pointer-events', 'none', 'important');
-  }
+  if (e && e.stopPropagation) e.stopPropagation();
 };
 
 window.toggleSimDevPanel = function(e) {
-  if (e) e.stopPropagation();
-  const panel = document.getElementById('simPanel');
-  if (!panel) return;
-  const isHidden = panel.classList.contains('hidden') || panel.style.display === 'none';
-  if (isHidden) {
-    panel.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
-    panel.style.setProperty('display', 'block', 'important');
-    panel.style.setProperty('opacity', '1', 'important');
-    panel.style.setProperty('pointer-events', 'auto', 'important');
-    panel.style.setProperty('z-index', '99999', 'important');
-    if (typeof updateSimTargetPoliceInfo === "function") updateSimTargetPoliceInfo();
-  } else {
-    window.closeSimDevPanel();
-  }
+  if (e && e.stopPropagation) e.stopPropagation();
 };
 window.openJoinModal = function() {
   const modal = document.getElementById("onboardingModal");

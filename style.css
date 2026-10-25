@@ -332,18 +332,6 @@ body {
   z-index: 99999 !important;
 }
 
-#simPanel {
-  position: fixed !important;
-  z-index: 99999 !important;
-}
-
-#simPanel.hidden,
-#simPanel[style*="display: none"] {
-  display: none !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
-}
-
 #convoyAlertBanner,
 #approachingPoliceBanner {
   position: fixed !important;
