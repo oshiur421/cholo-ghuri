@@ -1312,6 +1312,292 @@ body {
   }
 }
 
+/* ==========================================
+   PUSH-TO-TALK (PTT) WALKIE-TALKIE SYSTEM
+   ========================================== */
+#pttWalkieDock,
+.ptt-walkie-dock {
+  position: fixed;
+  left: 12px;
+  bottom: 96px;
+  z-index: 9500;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+/* Speaker Mute/Unmute Toggle */
+#pttMuteSpeakerBtn,
+.ptt-speaker-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(11, 18, 29, 0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1.5px solid rgba(0, 255, 136, 0.4);
+  color: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.65), 0 0 10px rgba(0, 255, 136, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  pointer-events: auto;
+}
+
+.ptt-speaker-btn:hover {
+  transform: scale(1.08);
+  border-color: var(--neon-green);
+  box-shadow: 0 0 16px rgba(0, 255, 136, 0.5);
+}
+
+.ptt-speaker-btn:active {
+  transform: scale(0.94);
+}
+
+.ptt-speaker-btn.muted {
+  border-color: rgba(239, 68, 68, 0.65);
+  background: rgba(26, 12, 16, 0.92);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.65), 0 0 12px rgba(239, 68, 68, 0.4);
+}
+
+.ptt-speaker-btn.muted:hover {
+  border-color: #ff3b30;
+  box-shadow: 0 0 18px rgba(239, 68, 68, 0.6);
+}
+
+.ptt-speaker-icon {
+  font-size: 15px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* Main Glove-Friendly PTT Button */
+#pttTalkBtn,
+.ptt-talk-btn {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #132233 0%, #070e17 80%, #03070b 100%);
+  border: 2.5px solid #00ff88;
+  color: #f1f5f9;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.75), 0 0 18px rgba(0, 255, 136, 0.45), inset 0 2px 4px rgba(255, 255, 255, 0.25);
+  transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  pointer-events: auto;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+.ptt-talk-btn:hover {
+  transform: scale(1.06);
+  border-color: #00ffb7;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.8), 0 0 24px rgba(0, 255, 136, 0.65), inset 0 2px 5px rgba(255, 255, 255, 0.3);
+}
+
+.ptt-talk-btn:active {
+  transform: scale(0.95);
+}
+
+.ptt-talk-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.ptt-talk-icon {
+  font-size: 20px;
+  color: var(--neon-green);
+  filter: drop-shadow(0 0 6px var(--neon-green));
+  transition: all 0.2s ease;
+}
+
+.ptt-talk-label {
+  font-family: 'Orbitron', 'Chakra Petch', monospace;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #e2e8f0;
+  margin-top: 3px;
+  text-shadow: 0 0 8px rgba(0, 255, 136, 0.6);
+  transition: all 0.2s ease;
+}
+
+.ptt-countdown-badge {
+  position: absolute;
+  top: -12px;
+  right: -10px;
+  background: #ff2a44;
+  color: #ffffff;
+  font-family: 'Orbitron', monospace;
+  font-size: 9px;
+  font-weight: 900;
+  padding: 2px 6px;
+  border-radius: 9999px;
+  border: 1.5px solid #ffffff;
+  box-shadow: 0 0 10px rgba(255, 42, 68, 0.95);
+  animation: pttCountBadgePulse 0.8s infinite alternate;
+}
+
+.ptt-pulse-ring {
+  display: none;
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 2px solid #ff334b;
+  pointer-events: none;
+}
+
+/* Transmitting / Recording Mode */
+.ptt-talk-btn.transmitting {
+  background: radial-gradient(circle at 35% 35%, #421118 0%, #20070b 80%, #100305 100%) !important;
+  border-color: #ff334b !important;
+  box-shadow: 0 0 25px rgba(255, 51, 75, 0.95), 0 0 50px rgba(255, 119, 0, 0.4), inset 0 0 15px rgba(255, 51, 75, 0.6) !important;
+  animation: pttTransmitBorderPulse 0.9s infinite alternate;
+}
+
+.ptt-talk-btn.transmitting .ptt-talk-icon {
+  color: #ff334b;
+  filter: drop-shadow(0 0 8px #ff334b);
+  animation: pttIconVibrate 0.2s infinite;
+}
+
+.ptt-talk-btn.transmitting .ptt-talk-label {
+  color: #ff99aa;
+  text-shadow: 0 0 10px rgba(255, 51, 75, 0.9);
+}
+
+.ptt-talk-btn.transmitting .ptt-pulse-ring {
+  display: block;
+  animation: pttPulseRingAnim 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+
+/* Active Radio Floating Banner */
+#pttRadioBanner,
+.ptt-radio-banner {
+  position: fixed;
+  top: 135px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9600;
+  pointer-events: none;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.ptt-radio-banner.hidden {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-12px) scale(0.9);
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.ptt-radio-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(9, 14, 23, 0.94);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1.5px solid var(--neon-green);
+  border-radius: 9999px;
+  padding: 6px 18px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 255, 136, 0.4);
+}
+
+.ptt-radio-banner.transmitting .ptt-radio-banner-content {
+  border-color: #ff3b30;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 22px rgba(255, 59, 48, 0.55);
+}
+
+.ptt-radio-banner.receiving .ptt-radio-banner-content {
+  border-color: #00d2ff;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 22px rgba(0, 210, 255, 0.55);
+}
+
+.ptt-radio-banner-text {
+  font-family: 'Chakra Petch', 'Rajdhani', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #f1f5f9;
+  white-space: nowrap;
+}
+
+/* Audio wave animation */
+.ptt-audio-wave {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 16px;
+}
+
+.ptt-audio-wave .wave-bar {
+  width: 3px;
+  height: 6px;
+  background: var(--neon-green);
+  border-radius: 2px;
+  animation: pttWaveMotion 0.6s ease-in-out infinite alternate;
+}
+
+.ptt-radio-banner.transmitting .wave-bar {
+  background: #ff3b30;
+}
+
+.ptt-radio-banner.receiving .wave-bar {
+  background: #00d2ff;
+}
+
+.ptt-audio-wave .wave-bar:nth-child(1) { animation-delay: 0.0s; }
+.ptt-audio-wave .wave-bar:nth-child(2) { animation-delay: 0.15s; }
+.ptt-audio-wave .wave-bar:nth-child(3) { animation-delay: 0.3s; }
+.ptt-audio-wave .wave-bar:nth-child(4) { animation-delay: 0.45s; }
+
+/* PTT Keyframe Animations */
+@keyframes pttWaveMotion {
+  0% { height: 4px; opacity: 0.5; }
+  100% { height: 16px; opacity: 1; }
+}
+
+@keyframes pttCountBadgePulse {
+  0% { transform: scale(0.95); }
+  100% { transform: scale(1.15); }
+}
+
+@keyframes pttPulseRingAnim {
+  0% { transform: scale(1); opacity: 0.9; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+
+@keyframes pttTransmitBorderPulse {
+  0% { box-shadow: 0 0 16px rgba(255, 51, 75, 0.7), 0 0 35px rgba(255, 119, 0, 0.3); }
+  100% { box-shadow: 0 0 34px rgba(255, 51, 75, 1), 0 0 55px rgba(255, 119, 0, 0.6); }
+}
+
+@keyframes pttIconVibrate {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-3deg); }
+  75% { transform: rotate(3deg); }
+}
+
 
 
 

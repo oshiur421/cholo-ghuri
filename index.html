@@ -262,6 +262,19 @@
   <!-- ==================== FLOATING MINIMIZED ALERT DOCK ==================== -->
   <div id="miniAlertDock" class="mini-alert-dock" aria-label="Active floating alerts"></div>
 
+  <!-- ==================== PTT ACTIVE RADIO BANNER (TOP-CENTER) ==================== -->
+  <div id="pttRadioBanner" class="ptt-radio-banner hidden" style="position: fixed; top: 135px; left: 50%; transform: translateX(-50%); z-index: 9600; pointer-events: none;">
+    <div class="ptt-radio-banner-content">
+      <div class="ptt-audio-wave" aria-hidden="true">
+        <span class="wave-bar"></span>
+        <span class="wave-bar"></span>
+        <span class="wave-bar"></span>
+        <span class="wave-bar"></span>
+      </div>
+      <span id="pttRadioBannerText" class="ptt-radio-banner-text">📻 Rider transmitting...</span>
+    </div>
+  </div>
+
   <!-- ==================== TOP FLOATING HUD BAR ==================== -->
   <header class="hud-top-bar fixed top-0 left-0 right-0 z-[10000] p-1.5 sm:p-3 pointer-events-none w-full max-w-full overflow-x-hidden" style="pointer-events: none !important; z-index: 10000 !important;">
     <div class="hud-top-container max-w-7xl mx-auto flex flex-col gap-1.5 sm:gap-2.5 w-full pointer-events-none" style="pointer-events: none !important;">
@@ -542,6 +555,24 @@
         <i class="fa-solid fa-xmark"></i>
       </button>
     </div>
+  </div>
+
+  <!-- ==================== PUSH-TO-TALK (PTT) WALKIE-TALKIE DOCK ==================== -->
+  <div id="pttWalkieDock" class="ptt-walkie-dock" style="position: fixed; left: 12px; bottom: 96px; z-index: 9500; display: flex; flex-direction: column; align-items: center; gap: 8px;" aria-label="Walkie-Talkie Voice Communicator">
+    <!-- Speaker Mute/Unmute Toggle Button -->
+    <button id="pttMuteSpeakerBtn" type="button" class="ptt-speaker-btn" title="Mute/Unmute Incoming Radio Audio" aria-label="Mute or Unmute Walkie-Talkie Audio">
+      <span id="pttSpeakerIcon" class="ptt-speaker-icon">🔊</span>
+    </button>
+
+    <!-- Main Glove-Friendly PTT Button -->
+    <button id="pttTalkBtn" type="button" class="ptt-talk-btn" title="Push To Talk (Tap or Hold to Talk)" aria-label="Push To Talk Voice Communicator">
+      <div class="ptt-talk-content">
+        <i class="fa-solid fa-walkie-talkie ptt-talk-icon" id="pttTalkIcon"></i>
+        <span id="pttTalkLabel" class="ptt-talk-label">PTT</span>
+        <span id="pttCountdownBadge" class="ptt-countdown-badge hidden">10s</span>
+      </div>
+      <div class="ptt-pulse-ring"></div>
+    </button>
   </div>
 
   <!-- ==================== BOTTOM GLOVE-FRIENDLY HUD CONTROL BAR ==================== -->

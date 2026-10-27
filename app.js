@@ -2779,6 +2779,11 @@ async function runDualSyncLoop() {
     if (!firstErrorMessage) firstErrorMessage = policeRes.error || "Fetch police reports error";
   }
 
+  // 4. Direct REST: Poll recent voice messages from the last 12 seconds (Dual-Engine Walkie-Talkie fallback)
+  if (typeof fetchRecentVoiceMessages === "function") {
+    await fetchRecentVoiceMessages();
+  }
+
   // Update Top HUD DB Sync indicator dot
   if (hasError) {
     updateSyncStatusUI(false, firstErrorMessage);
@@ -2874,6 +2879,10 @@ function joinSupabaseRoom(roomCode) {
   isHandlingKick = false;
   isHandlingRoomClose = false;
   isRoomClosedByLeader = false;
+  joinedRoomTimestamp = Date.now();
+  if (typeof playedVoiceIds !== "undefined" && playedVoiceIds.clear) {
+    playedVoiceIds.clear();
+  }
 
   // Single-Leader enforcement on joining / restoring room
   enforceSingleLeaderForRoom(cleanRoom);
@@ -2962,6 +2971,11 @@ function joinSupabaseRoom(roomCode) {
           if (payload) {
             addOrUpdatePoliceMarker(payload);
             evaluatePoliceProximity();
+          }
+        })
+        .on("broadcast", { event: "voice_ptt" }, ({ payload }) => {
+          if (payload && typeof handleIncomingVoiceMessage === "function") {
+            handleIncomingVoiceMessage(payload);
           }
         })
         .subscribe(async (status) => {
@@ -3716,6 +3730,25 @@ async function clearSession() {
   isHandlingKick = false;
   isHandlingRoomClose = false;
   isRoomClosedByLeader = false;
+  joinedRoomTimestamp = Date.now();
+  if (typeof playedVoiceIds !== "undefined" && playedVoiceIds.clear) {
+    playedVoiceIds.clear();
+  }
+  if (typeof voicePlaybackQueue !== "undefined") {
+    voicePlaybackQueue = [];
+  }
+  if (typeof isPlayingVoiceQueue !== "undefined" && isPlayingVoiceQueue) {
+    try {
+      if (sharedAudioPlayer) {
+        sharedAudioPlayer.pause();
+        sharedAudioPlayer.currentTime = 0;
+      }
+    } catch (e) {}
+    isPlayingVoiceQueue = false;
+  }
+  if (typeof hidePttRadioBanner === "function") {
+    hidePttRadioBanner();
+  }
 
   currentSession = {
     riderId: generateUUID(),
@@ -3814,6 +3847,640 @@ function escapeHtml(str) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+// ==========================================
+// 15.5. PUSH-TO-TALK (PTT) WALKIE-TALKIE SYSTEM
+// ==========================================
+let isPttRecording = false;
+let pttPressStartTime = 0;
+let pttCountdownTimer = null;
+let pttCountdownVal = 10;
+let pttMediaRecorder = null;
+let pttMediaStream = null;
+let pttRecordedChunks = [];
+let isPttSpeakerMuted = false;
+let voicePlaybackQueue = [];
+let isPlayingVoiceQueue = false;
+let sharedAudioPlayer = new Audio();
+let isSharedAudioUnlocked = false;
+let playedVoiceIds = new Set();
+let joinedRoomTimestamp = Date.now();
+let pttLastTouchTime = 0;
+
+// Walkie-Talkie Sound Synthesizer (Native WebAudio API)
+function playPttChirp(type = "start") {
+  if (isAudioMuted) return;
+  if (isPttSpeakerMuted && type !== "start" && type !== "roger") return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+
+    if (type === "start") {
+      // Crisp walkie-talkie mic key chirp: dual beep (1200Hz -> 1800Hz)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = "sine";
+      osc1.frequency.setValueAtTime(1200, now);
+      gain1.gain.setValueAtTime(0.2, now);
+      gain1.gain.linearRampToValueAtTime(0, now + 0.04);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.04);
+
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = "sine";
+      osc2.frequency.setValueAtTime(1800, now + 0.045);
+      gain2.gain.setValueAtTime(0.25, now + 0.045);
+      gain2.gain.linearRampToValueAtTime(0, now + 0.09);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.045);
+      osc2.stop(now + 0.09);
+    } else if (type === "end" || type === "roger") {
+      // Classic Motorola/Kenwood roger beep: 2400Hz -> 1760Hz
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = "sine";
+      osc1.frequency.setValueAtTime(2400, now);
+      gain1.gain.setValueAtTime(0.22, now);
+      gain1.gain.linearRampToValueAtTime(0, now + 0.05);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.05);
+
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = "sine";
+      osc2.frequency.setValueAtTime(1760, now + 0.055);
+      gain2.gain.setValueAtTime(0.2, now + 0.055);
+      gain2.gain.linearRampToValueAtTime(0, now + 0.11);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.055);
+      osc2.stop(now + 0.11);
+    } else if (type === "incoming") {
+      // Incoming transmission alert chirp: double high-pitched beep (1600Hz -> 2100Hz)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = "sine";
+      osc1.frequency.setValueAtTime(1600, now);
+      gain1.gain.setValueAtTime(0.22, now);
+      gain1.gain.linearRampToValueAtTime(0, now + 0.04);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.04);
+
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = "sine";
+      osc2.frequency.setValueAtTime(2100, now + 0.045);
+      gain2.gain.setValueAtTime(0.25, now + 0.045);
+      gain2.gain.linearRampToValueAtTime(0, now + 0.09);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.045);
+      osc2.stop(now + 0.09);
+    }
+  } catch (e) {
+    console.debug("[playPttChirp notice]", e);
+  }
+}
+
+// Mobile Autoplay Unlocker for WebAudio and Audio elements
+function unlockAudioAutoplay() {
+  try {
+    const ctx = getAudioContext();
+    if (ctx && ctx.state === "suspended") {
+      ctx.resume().catch(() => {});
+    }
+  } catch (e) {}
+
+  if (isSharedAudioUnlocked) return;
+  try {
+    if (!sharedAudioPlayer) {
+      sharedAudioPlayer = new Audio();
+    }
+    // Silent 1-sample WAV to prime audio hardware on mobile Safari & Android Chrome
+    sharedAudioPlayer.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
+    const playPromise = sharedAudioPlayer.play();
+    if (playPromise !== undefined) {
+      playPromise.then(() => {
+        sharedAudioPlayer.pause();
+        isSharedAudioUnlocked = true;
+      }).catch(() => {});
+    }
+  } catch (e) {}
+}
+
+window.addEventListener("click", unlockAudioAutoplay, { passive: true });
+window.addEventListener("touchstart", unlockAudioAutoplay, { passive: true });
+
+function getSupportedAudioMimeType() {
+  const candidateTypes = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/ogg;codecs=opus",
+    "audio/mp4",
+    ""
+  ];
+  for (const t of candidateTypes) {
+    if (!t) return "";
+    if (typeof MediaRecorder !== "undefined" && typeof MediaRecorder.isTypeSupported === "function") {
+      if (MediaRecorder.isTypeSupported(t)) return t;
+    }
+  }
+  return "";
+}
+
+function showPttTransmittingBanner() {
+  const banner = document.getElementById("pttRadioBanner");
+  const text = document.getElementById("pttRadioBannerText");
+  if (banner && text) {
+    const name = (currentSession && currentSession.riderName) ? currentSession.riderName : "You";
+    text.textContent = `📻 ${name} transmitting...`;
+    banner.className = "ptt-radio-banner transmitting";
+  }
+}
+
+function showPttReceivingBanner(senderName) {
+  const banner = document.getElementById("pttRadioBanner");
+  const text = document.getElementById("pttRadioBannerText");
+  if (banner && text) {
+    text.textContent = `🔊 ${senderName || "Rider"} speaking...`;
+    banner.className = "ptt-radio-banner receiving";
+  }
+}
+
+function hidePttRadioBanner() {
+  if (isPttRecording) return;
+  const banner = document.getElementById("pttRadioBanner");
+  if (banner) {
+    banner.className = "ptt-radio-banner hidden";
+  }
+}
+
+function setPttRecordingUI(isRec) {
+  const talkBtn = document.getElementById("pttTalkBtn");
+  const talkLabel = document.getElementById("pttTalkLabel");
+  const badge = document.getElementById("pttCountdownBadge");
+
+  if (isRec) {
+    if (talkBtn) talkBtn.classList.add("transmitting");
+    if (talkLabel) talkLabel.textContent = "REC";
+    if (badge) {
+      badge.classList.remove("hidden");
+      badge.textContent = "10s";
+    }
+    showPttTransmittingBanner();
+  } else {
+    if (talkBtn) talkBtn.classList.remove("transmitting");
+    if (talkLabel) talkLabel.textContent = "PTT";
+    if (badge) {
+      badge.classList.add("hidden");
+      badge.textContent = "10s";
+    }
+    hidePttRadioBanner();
+  }
+}
+
+function startPttCountdown() {
+  if (pttCountdownTimer) clearInterval(pttCountdownTimer);
+  pttCountdownVal = 10;
+  updatePttCountdownBadge(pttCountdownVal);
+
+  pttCountdownTimer = setInterval(() => {
+    pttCountdownVal--;
+    if (pttCountdownVal <= 0) {
+      clearInterval(pttCountdownTimer);
+      pttCountdownTimer = null;
+      stopAndSendPttRecording();
+    } else {
+      updatePttCountdownBadge(pttCountdownVal);
+    }
+  }, 1000);
+}
+
+function updatePttCountdownBadge(sec) {
+  const badge = document.getElementById("pttCountdownBadge");
+  if (badge) {
+    badge.textContent = `${sec}s`;
+    badge.classList.remove("hidden");
+  }
+}
+
+async function startPttRecording() {
+  if (isPttRecording) return;
+  unlockAudioAutoplay();
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showRadarToast("RADIO ERROR", "Audio recording not supported on this browser.");
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        channelCount: 1,
+        sampleRate: 16000
+      }
+    });
+    pttMediaStream = stream;
+
+    const mimeType = getSupportedAudioMimeType();
+    const options = { audioBitsPerSecond: 16000 };
+    if (mimeType) options.mimeType = mimeType;
+
+    pttMediaRecorder = new MediaRecorder(stream, options);
+    pttRecordedChunks = [];
+
+    pttMediaRecorder.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) {
+        pttRecordedChunks.push(event.data);
+      }
+    };
+
+    pttMediaRecorder.onstop = () => {
+      const mime = (pttMediaRecorder && pttMediaRecorder.mimeType) || mimeType || "audio/webm";
+      const audioBlob = new Blob(pttRecordedChunks, { type: mime });
+
+      if (pttMediaStream) {
+        try {
+          pttMediaStream.getTracks().forEach((track) => track.stop());
+        } catch (e) {}
+        pttMediaStream = null;
+      }
+
+      // Ensure clip is valid before transmitting (> 200 bytes)
+      if (audioBlob.size > 200) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64Data = reader.result;
+          sendPttVoiceMessage(base64Data);
+        };
+        reader.readAsDataURL(audioBlob);
+      } else {
+        console.debug("[PTT] Audio clip empty or discarded.");
+      }
+    };
+
+    pttMediaRecorder.start(250);
+    isPttRecording = true;
+
+    playPttChirp("start");
+    setPttRecordingUI(true);
+    startPttCountdown();
+
+  } catch (err) {
+    console.warn("[PTT recording start error]", err);
+    setPttRecordingUI(false);
+    isPttRecording = false;
+    if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+      showRadarToast("MIC PERMISSION", "Please allow microphone access to talk on walkie-talkie.");
+    } else {
+      showRadarToast("MIC ERROR", "Could not start microphone: " + (err.message || "Unknown error"));
+    }
+  }
+}
+
+function stopAndSendPttRecording() {
+  if (!isPttRecording) return;
+  isPttRecording = false;
+
+  if (pttCountdownTimer) {
+    clearInterval(pttCountdownTimer);
+    pttCountdownTimer = null;
+  }
+
+  setPttRecordingUI(false);
+  playPttChirp("roger");
+
+  if (pttMediaRecorder && pttMediaRecorder.state !== "inactive") {
+    try {
+      pttMediaRecorder.stop();
+    } catch (e) {
+      console.debug("[PTT stop error]", e);
+    }
+  }
+}
+
+function handlePttPressStart(e) {
+  if (e && e.cancelable && e.type === "touchstart") {
+    e.preventDefault();
+  }
+  unlockAudioAutoplay();
+
+  if (isPttRecording) {
+    // Tap-to-Send: Tapping again immediately stops and sends!
+    stopAndSendPttRecording();
+    return;
+  }
+
+  pttPressStartTime = Date.now();
+  startPttRecording();
+}
+
+function handlePttPressEnd(e) {
+  if (e && e.cancelable && e.type === "touchend") {
+    e.preventDefault();
+  }
+  if (!isPttRecording) return;
+
+  const duration = Date.now() - pttPressStartTime;
+  if (duration >= 400) {
+    // Hold-to-Talk: Pressed and held (> 400ms), release stops and sends!
+    stopAndSendPttRecording();
+  } else {
+    // Tap-to-Talk: Tapped once (< 400ms). Keep recording!
+    // Next tap or 10-second countdown will stop and send.
+  }
+}
+
+async function sendPttVoiceMessage(audioData) {
+  if (!audioData) return;
+  const cleanRoom = (currentSession.roomCode || "").trim().toUpperCase();
+  if (!cleanRoom || cleanRoom === "----") {
+    showRadarToast("CONVOY REQUIRED", "Join or create a tour room first to use Walkie-Talkie.");
+    return;
+  }
+
+  const msgId = "v_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
+  playedVoiceIds.add(msgId);
+
+  const voicePayload = {
+    msgId: msgId,
+    room_code: cleanRoom,
+    sender_id: currentSession.riderId,
+    sender_name: currentSession.riderName || "Rider",
+    audio_data: audioData,
+    created_at: new Date().toISOString()
+  };
+
+  showRadarToast("RADIO TRANSMITTED", "📻 Walkie-talkie clip broadcast to convoy!");
+
+  // Engine A: Supabase Realtime Broadcast (event: 'voice_ptt')
+  if (realtimeChannel) {
+    try {
+      realtimeChannel.send({
+        type: "broadcast",
+        event: "voice_ptt",
+        payload: voicePayload
+      });
+    } catch (bcErr) {
+      console.debug("[PTT Realtime broadcast note]", bcErr);
+    }
+  }
+
+  // Engine B: Supabase REST POST /rest/v1/voice_messages (Fallback, silently ignore if table not exists)
+  try {
+    await supabaseRest("voice_messages", "POST", {
+      room_code: cleanRoom,
+      sender_id: currentSession.riderId,
+      sender_name: currentSession.riderName || "Rider",
+      audio_data: audioData
+    });
+  } catch (restErr) {
+    // Silently ignore if table doesn't exist yet
+    console.debug("[PTT REST POST voice_messages note]", restErr);
+  }
+}
+
+async function fetchRecentVoiceMessages() {
+  if (!currentSession.roomCode || currentSession.roomCode === "----") return;
+  const cleanRoom = encodeURIComponent(currentSession.roomCode.trim().toUpperCase());
+  try {
+    const list = await supabaseRest(
+      `voice_messages?room_code=eq.${cleanRoom}&order=created_at.desc&limit=5`,
+      "GET"
+    );
+    if (Array.isArray(list) && list.length > 0) {
+      handleIncomingVoiceList(list);
+    }
+  } catch (err) {
+    // Silently ignore if table doesn't exist yet
+    console.debug("[PTT fetchRecentVoiceMessages note]", err);
+  }
+}
+
+function handleIncomingVoiceList(list) {
+  if (!Array.isArray(list)) return;
+  const now = Date.now();
+  const ordered = [...list].reverse();
+  for (const item of ordered) {
+    if (!item || !item.audio_data) continue;
+    if (item.created_at) {
+      const msgTime = new Date(item.created_at).getTime();
+      if (now - msgTime > 12000) continue; // older than 12s
+      if (msgTime < joinedRoomTimestamp - 3000) continue; // before rider joined room
+    }
+    handleIncomingVoiceMessage({
+      msgId: item.msgId || (item.id ? ("db_" + item.id) : null),
+      id: item.id,
+      room_code: item.room_code,
+      sender_id: item.sender_id,
+      sender_name: item.sender_name,
+      audio_data: item.audio_data,
+      created_at: item.created_at
+    });
+  }
+}
+
+function handleIncomingVoiceMessage(msg) {
+  if (!msg || !msg.audio_data) return;
+  if (msg.sender_id && msg.sender_id === currentSession.riderId) return;
+
+  const msgKey = msg.msgId || (msg.id ? ("db_" + msg.id) : null) || ("voice_" + (msg.sender_id || "") + "_" + (msg.created_at || ""));
+  if (playedVoiceIds.has(msgKey)) return;
+
+  if (msg.created_at) {
+    const msgTime = new Date(msg.created_at).getTime();
+    if (msgTime < joinedRoomTimestamp - 3000) return;
+  }
+
+  playedVoiceIds.add(msgKey);
+  if (msg.id) playedVoiceIds.add("db_" + msg.id);
+  if (msg.msgId) playedVoiceIds.add(msg.msgId);
+
+  enqueueVoicePlayback(msg);
+}
+
+function enqueueVoicePlayback(msg) {
+  if (isPttSpeakerMuted) {
+    console.debug("[PTT] Speaker is muted, skipping voice from:", msg.sender_name);
+    return;
+  }
+  voicePlaybackQueue.push(msg);
+  if (!isPlayingVoiceQueue) {
+    processVoicePlaybackQueue();
+  }
+}
+
+function processVoicePlaybackQueue() {
+  if (voicePlaybackQueue.length === 0) {
+    isPlayingVoiceQueue = false;
+    hidePttRadioBanner();
+    return;
+  }
+
+  if (isPttSpeakerMuted) {
+    voicePlaybackQueue = [];
+    isPlayingVoiceQueue = false;
+    hidePttRadioBanner();
+    return;
+  }
+
+  isPlayingVoiceQueue = true;
+  const currentMsg = voicePlaybackQueue.shift();
+
+  showPttReceivingBanner(currentMsg.sender_name);
+  playPttChirp("incoming");
+
+  setTimeout(() => {
+    if (isPttSpeakerMuted) {
+      processVoicePlaybackQueue();
+      return;
+    }
+
+    try {
+      sharedAudioPlayer.src = currentMsg.audio_data;
+      sharedAudioPlayer.onended = () => {
+        playPttChirp("roger");
+        setTimeout(() => {
+          processVoicePlaybackQueue();
+        }, 350);
+      };
+      sharedAudioPlayer.onerror = (e) => {
+        console.warn("[PTT audio error]", e);
+        setTimeout(() => {
+          processVoicePlaybackQueue();
+        }, 200);
+      };
+      sharedAudioPlayer.play().catch((err) => {
+        console.warn("[PTT autoplay prevented]", err);
+        setTimeout(() => {
+          processVoicePlaybackQueue();
+        }, 200);
+      });
+    } catch (e) {
+      console.warn("[PTT playback setup error]", e);
+      setTimeout(() => {
+        processVoicePlaybackQueue();
+      }, 200);
+    }
+  }, 120);
+}
+
+function togglePttSpeakerMute() {
+  isPttSpeakerMuted = !isPttSpeakerMuted;
+  const btn = document.getElementById("pttMuteSpeakerBtn");
+  const icon = document.getElementById("pttSpeakerIcon");
+
+  if (isPttSpeakerMuted) {
+    if (icon) icon.textContent = "🔇";
+    if (btn) {
+      btn.classList.add("muted");
+      btn.title = "Unmute Incoming Radio Audio (Currently Muted)";
+    }
+    if (isPlayingVoiceQueue) {
+      try {
+        sharedAudioPlayer.pause();
+        sharedAudioPlayer.currentTime = 0;
+      } catch (e) {}
+      voicePlaybackQueue = [];
+      isPlayingVoiceQueue = false;
+      hidePttRadioBanner();
+    }
+    showRadarToast("WALKIE-TALKIE MUTED", "Incoming radio audio muted.");
+  } else {
+    if (icon) icon.textContent = "🔊";
+    if (btn) {
+      btn.classList.remove("muted");
+      btn.title = "Mute Incoming Radio Audio (Currently Active)";
+    }
+    unlockAudioAutoplay();
+    showRadarToast("WALKIE-TALKIE ACTIVE", "Incoming radio audio unmuted.");
+  }
+}
+
+function initPttCommunicator() {
+  const pttTalkBtn = document.getElementById("pttTalkBtn");
+  const pttMuteSpeakerBtn = document.getElementById("pttMuteSpeakerBtn");
+
+  if (pttMuteSpeakerBtn && !pttMuteSpeakerBtn._hasPttListener) {
+    pttMuteSpeakerBtn._hasPttListener = true;
+    pttMuteSpeakerBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      togglePttSpeakerMute();
+    });
+    pttMuteSpeakerBtn.addEventListener("touchend", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      togglePttSpeakerMute();
+    }, { passive: false });
+  }
+
+  if (pttTalkBtn && !pttTalkBtn._hasPttListener) {
+    pttTalkBtn._hasPttListener = true;
+
+    pttTalkBtn.addEventListener("touchstart", (e) => {
+      pttLastTouchTime = Date.now();
+      handlePttPressStart(e);
+    }, { passive: false });
+
+    pttTalkBtn.addEventListener("touchend", (e) => {
+      pttLastTouchTime = Date.now();
+      handlePttPressEnd(e);
+    }, { passive: false });
+
+    pttTalkBtn.addEventListener("touchcancel", (e) => {
+      pttLastTouchTime = Date.now();
+      if (isPttRecording) {
+        stopAndSendPttRecording();
+      }
+    });
+
+    pttTalkBtn.addEventListener("mousedown", (e) => {
+      if (Date.now() - pttLastTouchTime < 600) return;
+      if (e.button !== 0) return;
+      handlePttPressStart(e);
+    });
+
+    pttTalkBtn.addEventListener("mouseup", (e) => {
+      if (Date.now() - pttLastTouchTime < 600) return;
+      if (e.button !== 0) return;
+      handlePttPressEnd(e);
+    });
+
+    pttTalkBtn.addEventListener("mouseleave", (e) => {
+      if (isPttRecording && pttPressStartTime && (Date.now() - pttPressStartTime >= 400)) {
+        stopAndSendPttRecording();
+      }
+    });
+
+    pttTalkBtn.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+    });
+
+    pttTalkBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  }
+}
+
+// Auto-bind PTT listener on load
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initPttCommunicator);
+} else {
+  initPttCommunicator();
 }
 
 // ==========================================
@@ -4369,6 +5036,15 @@ function initApp() {
       if (map) map.invalidateSize();
     });
   } catch (e) {}
+
+  // 6. Initialize PTT Walkie-Talkie Communicator
+  try {
+    if (typeof initPttCommunicator === "function") {
+      initPttCommunicator();
+    }
+  } catch (pttErr) {
+    console.warn("PTT Communicator init notice:", pttErr);
+  }
 }
 
 // Ensure initApp executes reliably even if DOMContentLoaded already fired
