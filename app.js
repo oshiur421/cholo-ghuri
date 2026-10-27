@@ -561,6 +561,11 @@ let isAudioMuted = false;
 let audioCtx = null;
 let watchId = null;
 
+// Walkie-Talkie Audio Priority State
+window.isWalkieTalkieActive = false;
+window.isRecordingPtt = false;
+window.isPlayingVoice = false;
+
 // Supabase Channels & Timers
 let realtimeChannel = null;
 let ridersDbSubscription = null;
@@ -722,6 +727,12 @@ function getAudioContext() {
 
 function playSound(type) {
   if (isAudioMuted) return;
+  if (window.isWalkieTalkieActive || window.isRecordingPtt || window.isPlayingVoice) {
+    if ("speechSynthesis" in window) {
+      try { window.speechSynthesis.cancel(); } catch (e) {}
+    }
+    if (type !== "click") return;
+  }
   try {
     const ctx = getAudioContext();
     if (!ctx) return;
@@ -853,6 +864,12 @@ function playSound(type) {
 // 4. TEXT-TO-SPEECH ANNOUNCER
 // ==========================================
 function speakAnnouncement(text) {
+  if (window.isWalkieTalkieActive || window.isRecordingPtt || window.isPlayingVoice) {
+    if ("speechSynthesis" in window) {
+      try { window.speechSynthesis.cancel(); } catch (e) {}
+    }
+    return;
+  }
   if (isAudioMuted || !("speechSynthesis" in window)) return;
   try {
     window.speechSynthesis.cancel();
@@ -866,6 +883,29 @@ function speakAnnouncement(text) {
     console.warn("Speech synthesis notice:", err);
   }
 }
+
+function speakText(text) {
+  if (window.isWalkieTalkieActive || window.isRecordingPtt || window.isPlayingVoice) {
+    if ("speechSynthesis" in window) {
+      try { window.speechSynthesis.cancel(); } catch (e) {}
+    }
+    return;
+  }
+  speakAnnouncement(text);
+}
+window.speakText = speakText;
+
+function announceRoadChange(newRoadName, newSpeedLimit, newRoadType = "Highway / Expressway") {
+  if (window.isWalkieTalkieActive || window.isRecordingPtt || window.isPlayingVoice) {
+    if ("speechSynthesis" in window) {
+      try { window.speechSynthesis.cancel(); } catch (e) {}
+    }
+    return;
+  }
+  playSound("roadChange");
+  speakAnnouncement(`Entering ${newRoadName}. Speed limit is ${newSpeedLimit} kilometers per hour.`);
+}
+window.announceRoadChange = announceRoadChange;
 
 // ==========================================
 // 5. HAVERSINE FORMULA & GEODESIC MATH
@@ -1297,7 +1337,13 @@ function evaluatePoliceProximity() {
     const now = Date.now();
     if (now - lastPoliceVoiceAnnounceTime > 25000) {
       lastPoliceVoiceAnnounceTime = now;
-      speakAnnouncement(`Police checkpost ahead, ${distFormatted} away, reported by ${closest.reported_by || "Biker"}.`);
+      if (window.isWalkieTalkieActive || window.isRecordingPtt || window.isPlayingVoice) {
+        if ("speechSynthesis" in window) {
+          try { window.speechSynthesis.cancel(); } catch (e) {}
+        }
+      } else {
+        speakAnnouncement(`Police checkpost ahead, ${distFormatted} away, reported by ${closest.reported_by || "Biker"}.`);
+      }
     }
 
     // Default: Show Minimized Round Icon in #miniAlertDock (do NOT open big banner automatically!)
@@ -1873,7 +1919,13 @@ function evaluateConvoyDistances() {
     const now = Date.now();
     if (now - lastConvoyAlarmTime > 8000) {
       lastConvoyAlarmTime = now;
-      playSound("convoyAlarm");
+      if (window.isWalkieTalkieActive || window.isRecordingPtt || window.isPlayingVoice) {
+        if ("speechSynthesis" in window) {
+          try { window.speechSynthesis.cancel(); } catch (e) {}
+        }
+      } else {
+        playSound("convoyAlarm");
+      }
     }
 
     // Default: Show Minimized Round Icon in #miniAlertDock (do NOT open big banner automatically!)
@@ -2489,8 +2541,13 @@ function triggerRoadTransitionPopup(newRoadName, newSpeedLimit, newRoadType = "H
   const speedLimitVal = document.getElementById("speedLimitVal");
   if (speedLimitVal) speedLimitVal.textContent = newSpeedLimit;
 
-  playSound("roadChange");
-  speakAnnouncement(`Entering ${newRoadName}. Speed limit is ${newSpeedLimit} kilometers per hour.`);
+  if (window.isWalkieTalkieActive || window.isRecordingPtt || window.isPlayingVoice) {
+    if ("speechSynthesis" in window) {
+      try { window.speechSynthesis.cancel(); } catch (e) {}
+    }
+  } else {
+    announceRoadChange(newRoadName, newSpeedLimit, newRoadType);
+  }
 
   const roadAlertId = `road_${encodeURIComponent(newRoadName)}_${newSpeedLimit}`;
   currentRoadTransitionDetails = {
@@ -2587,7 +2644,13 @@ function evaluateOverspeed(currentSpeed) {
       speedStatusEl.textContent = "⚠️ OVERSPEED!";
       speedStatusEl.className = "text-[9px] font-black text-rose-500 uppercase tracking-wider animate-pulse";
     }
-    playSound("overspeed");
+    if (window.isWalkieTalkieActive || window.isRecordingPtt || window.isPlayingVoice) {
+      if ("speechSynthesis" in window) {
+        try { window.speechSynthesis.cancel(); } catch (e) {}
+      }
+    } else {
+      playSound("overspeed");
+    }
   } else {
     if (overspeedAlertEl) overspeedAlertEl.className = "opacity-0";
     if (liveSpeedEl) liveSpeedEl.classList.remove("speedo-warning");
@@ -2976,6 +3039,24 @@ function joinSupabaseRoom(roomCode) {
         .on("broadcast", { event: "voice_ptt" }, ({ payload }) => {
           if (payload && typeof handleIncomingVoiceMessage === "function") {
             handleIncomingVoiceMessage(payload);
+          }
+        })
+        .on("broadcast", { event: "voice_status" }, ({ payload }) => {
+          if (payload && payload.sender_id !== currentSession.riderId) {
+            if (payload.status === "talking") {
+              if (typeof setWalkieTalkieActive === "function") {
+                setWalkieTalkieActive(true);
+              } else {
+                window.isWalkieTalkieActive = true;
+                if ("speechSynthesis" in window) {
+                  try { window.speechSynthesis.cancel(); } catch (e) {}
+                }
+              }
+            } else if (payload.status === "idle") {
+              if (typeof setWalkieTalkieActive === "function") {
+                setWalkieTalkieActive(false);
+              }
+            }
           }
         })
         .subscribe(async (status) => {
@@ -3749,6 +3830,13 @@ async function clearSession() {
   if (typeof hidePttRadioBanner === "function") {
     hidePttRadioBanner();
   }
+  window.isRecordingPtt = false;
+  window.isPlayingVoice = false;
+  window.isWalkieTalkieActive = false;
+  if (typeof pttActiveCooldownTimer !== "undefined" && pttActiveCooldownTimer) {
+    clearTimeout(pttActiveCooldownTimer);
+    pttActiveCooldownTimer = null;
+  }
 
   currentSession = {
     riderId: generateUUID(),
@@ -3867,6 +3955,35 @@ let isSharedAudioUnlocked = false;
 let playedVoiceIds = new Set();
 let joinedRoomTimestamp = Date.now();
 let pttLastTouchTime = 0;
+let pttActiveCooldownTimer = null;
+
+function setWalkieTalkieActive(active) {
+  if (active) {
+    if (pttActiveCooldownTimer) {
+      clearTimeout(pttActiveCooldownTimer);
+      pttActiveCooldownTimer = null;
+    }
+    window.isWalkieTalkieActive = true;
+    // As soon as window.isWalkieTalkieActive becomes true, immediately cut off any ongoing TTS voice!
+    if ("speechSynthesis" in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (e) {}
+    }
+  } else {
+    // Clean Resume After Conversation Ends: wait 1500ms (1.5 seconds)
+    if (pttActiveCooldownTimer) {
+      clearTimeout(pttActiveCooldownTimer);
+    }
+    pttActiveCooldownTimer = setTimeout(() => {
+      if (!window.isRecordingPtt && !window.isPlayingVoice && (!voicePlaybackQueue || voicePlaybackQueue.length === 0)) {
+        window.isWalkieTalkieActive = false;
+      }
+      pttActiveCooldownTimer = null;
+    }, 1500);
+  }
+}
+window.setWalkieTalkieActive = setWalkieTalkieActive;
 
 // Walkie-Talkie Sound Synthesizer (Native WebAudio API)
 function playPttChirp(type = "start") {
@@ -4134,6 +4251,22 @@ async function startPttRecording() {
 
     pttMediaRecorder.start(250);
     isPttRecording = true;
+    window.isRecordingPtt = true;
+    setWalkieTalkieActive(true);
+
+    if (realtimeChannel) {
+      try {
+        realtimeChannel.send({
+          type: "broadcast",
+          event: "voice_status",
+          payload: {
+            status: "talking",
+            sender_id: currentSession.riderId,
+            sender_name: currentSession.riderName || "Rider"
+          }
+        });
+      } catch (e) {}
+    }
 
     playPttChirp("start");
     setPttRecordingUI(true);
@@ -4143,6 +4276,8 @@ async function startPttRecording() {
     console.warn("[PTT recording start error]", err);
     setPttRecordingUI(false);
     isPttRecording = false;
+    window.isRecordingPtt = false;
+    setWalkieTalkieActive(false);
     if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
       showRadarToast("MIC PERMISSION", "Please allow microphone access to talk on walkie-talkie.");
     } else {
@@ -4154,6 +4289,7 @@ async function startPttRecording() {
 function stopAndSendPttRecording() {
   if (!isPttRecording) return;
   isPttRecording = false;
+  window.isRecordingPtt = false;
 
   if (pttCountdownTimer) {
     clearInterval(pttCountdownTimer);
@@ -4162,6 +4298,24 @@ function stopAndSendPttRecording() {
 
   setPttRecordingUI(false);
   playPttChirp("roger");
+
+  if (realtimeChannel) {
+    try {
+      realtimeChannel.send({
+        type: "broadcast",
+        event: "voice_status",
+        payload: {
+          status: "idle",
+          sender_id: currentSession.riderId,
+          sender_name: currentSession.riderName || "Rider"
+        }
+      });
+    } catch (e) {}
+  }
+
+  if (!window.isPlayingVoice && (!voicePlaybackQueue || voicePlaybackQueue.length === 0)) {
+    setWalkieTalkieActive(false);
+  }
 
   if (pttMediaRecorder && pttMediaRecorder.state !== "inactive") {
     try {
@@ -4318,6 +4472,8 @@ function enqueueVoicePlayback(msg) {
     return;
   }
   voicePlaybackQueue.push(msg);
+  window.isPlayingVoice = true;
+  setWalkieTalkieActive(true);
   if (!isPlayingVoiceQueue) {
     processVoicePlaybackQueue();
   }
@@ -4326,18 +4482,28 @@ function enqueueVoicePlayback(msg) {
 function processVoicePlaybackQueue() {
   if (voicePlaybackQueue.length === 0) {
     isPlayingVoiceQueue = false;
+    window.isPlayingVoice = false;
     hidePttRadioBanner();
+    if (!window.isRecordingPtt) {
+      setWalkieTalkieActive(false);
+    }
     return;
   }
 
   if (isPttSpeakerMuted) {
     voicePlaybackQueue = [];
     isPlayingVoiceQueue = false;
+    window.isPlayingVoice = false;
     hidePttRadioBanner();
+    if (!window.isRecordingPtt) {
+      setWalkieTalkieActive(false);
+    }
     return;
   }
 
   isPlayingVoiceQueue = true;
+  window.isPlayingVoice = true;
+  setWalkieTalkieActive(true);
   const currentMsg = voicePlaybackQueue.shift();
 
   showPttReceivingBanner(currentMsg.sender_name);
@@ -4396,7 +4562,11 @@ function togglePttSpeakerMute() {
       } catch (e) {}
       voicePlaybackQueue = [];
       isPlayingVoiceQueue = false;
+      window.isPlayingVoice = false;
       hidePttRadioBanner();
+      if (!window.isRecordingPtt) {
+        setWalkieTalkieActive(false);
+      }
     }
     showRadarToast("WALKIE-TALKIE MUTED", "Incoming radio audio muted.");
   } else {
