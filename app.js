@@ -128,42 +128,78 @@ window.submitOnboarding = async function(event) {
   try {
     const cleanRoom = encodeURIComponent(code);
     const existingRiders = await supabaseRest(
-      `riders?room_code=eq.${cleanRoom}&select=id,rider_name,is_leader`,
+      `riders?room_code=eq.${cleanRoom}&select=id,rider_name,is_leader,updated_at`,
       "GET"
     );
 
-    if (Array.isArray(existingRiders)) {
-      const otherRiders = existingRiders.filter(r => r && r.id !== riderId);
-      const existingLeader = otherRiders.find(r => r.is_leader === true);
+    const now = Date.now();
+    const STALE_THRESHOLD_MS = 45000; // 45 seconds
 
-      if (existingLeader) {
-        // If room already has a leader, forcefully override isLeader = false even if checked
-        finalIsLeader = false;
-        if (wantedLeader) {
-          leaderOverriddenToast = `ℹ️ Leader (${existingLeader.rider_name || "Captain"}) already exists in this room. Joined as Rider!`;
+    const staleRiders = [];
+    const liveRiders = [];
+
+    if (Array.isArray(existingRiders)) {
+      existingRiders.forEach(r => {
+        if (!r || !r.id) return;
+        const time = r.updated_at ? new Date(r.updated_at).getTime() : 0;
+        if (isNaN(time) || (now - time > STALE_THRESHOLD_MS)) {
+          staleRiders.push(r);
+        } else {
+          liveRiders.push(r);
         }
-        if (isLeaderCheckbox) {
-          isLeaderCheckbox.checked = false;
-          isLeaderCheckbox.disabled = true;
-        }
-        const notice = document.getElementById("leaderNotice");
-        const noticeText = document.getElementById("leaderNoticeText");
-        if (noticeText) noticeText.textContent = `👑 Leader (${existingLeader.rider_name || "Captain"}) is already in this room — joining as Rider`;
-        if (notice) notice.classList.remove("hidden");
-        const container = document.getElementById("leaderToggleContainer");
-        if (container) container.classList.add("opacity-60");
-      } else if (otherRiders.length === 0) {
-        // Conversely, if the room is completely empty (0 riders in DB), make the room creator the Leader
-        finalIsLeader = true;
-        if (isLeaderCheckbox) {
-          isLeaderCheckbox.checked = true;
-          isLeaderCheckbox.disabled = false;
-        }
-        const notice = document.getElementById("leaderNotice");
-        if (notice) notice.classList.add("hidden");
-        const container = document.getElementById("leaderToggleContainer");
-        if (container) container.classList.remove("opacity-60");
+      });
+    }
+
+    // Auto-delete stale riders / dead leaders before entering
+    if (staleRiders.length > 0) {
+      staleRiders.forEach(s => {
+        supabaseRest(`riders?id=eq.${encodeURIComponent(s.id)}`, "DELETE").catch(() => {});
+        console.log(`[Stale rider purged on join] ${s.rider_name || s.id} (inactive > 45s)`);
+      });
+    }
+
+    if (liveRiders.length === 0) {
+      purgeEntireRoomData(code, false);
+    }
+
+    const otherLiveRiders = liveRiders.filter(r => r.id !== riderId);
+    const existingLeader = otherLiveRiders.find(r => r.is_leader === true);
+
+    if (existingLeader) {
+      // If room already has an active leader (< 45s), override isLeader = false
+      finalIsLeader = false;
+      if (wantedLeader) {
+        leaderOverriddenToast = `ℹ️ Leader (${existingLeader.rider_name || "Captain"}) is active in this room. Joined as Rider!`;
       }
+      if (isLeaderCheckbox) {
+        isLeaderCheckbox.checked = false;
+        isLeaderCheckbox.disabled = true;
+      }
+      const notice = document.getElementById("leaderNotice");
+      const noticeText = document.getElementById("leaderNoticeText");
+      if (noticeText) noticeText.textContent = `👑 Leader (${existingLeader.rider_name || "Captain"}) is already in this room — joining as Rider`;
+      if (notice) notice.classList.remove("hidden");
+      const container = document.getElementById("leaderToggleContainer");
+      if (container) container.classList.add("opacity-60");
+    } else if (otherLiveRiders.length === 0) {
+      // If room has 0 other active riders in DB, this rider becomes the Leader!
+      finalIsLeader = true;
+      if (isLeaderCheckbox) {
+        isLeaderCheckbox.checked = true;
+        isLeaderCheckbox.disabled = false;
+      }
+      const notice = document.getElementById("leaderNotice");
+      if (notice) notice.classList.add("hidden");
+      const container = document.getElementById("leaderToggleContainer");
+      if (container) container.classList.remove("opacity-60");
+    } else {
+      // Room has active teammates but no active leader: allow user to claim leadership if wanted!
+      finalIsLeader = wantedLeader;
+      if (isLeaderCheckbox) isLeaderCheckbox.disabled = false;
+      const notice = document.getElementById("leaderNotice");
+      if (notice) notice.classList.add("hidden");
+      const container = document.getElementById("leaderToggleContainer");
+      if (container) container.classList.remove("opacity-60");
     }
   } catch (err) {
     console.debug("[submitOnboarding leader check error]", err);
@@ -523,6 +559,88 @@ async function supabaseRest(endpoint, method = "GET", body = null) {
   return text ? JSON.parse(text) : null;
 }
 window.supabaseRest = supabaseRest;
+
+// Purge all database records associated with a room code (riders, tour_plans, police_reports/alerts)
+function purgeEntireRoomData(cleanRoom, useKeepalive = false) {
+  if (!cleanRoom || cleanRoom === "----") return;
+  const encodedRoom = encodeURIComponent(cleanRoom);
+  const closedRoom = encodeURIComponent("CLOSED_" + cleanRoom);
+  const endpoints = [
+    `riders?room_code=eq.${encodedRoom}`,
+    `riders?room_code=eq.${closedRoom}`,
+    `tour_plans?room_code=eq.${encodedRoom}`,
+    `police_reports?room_code=eq.${encodedRoom}`,
+    `police_alerts?room_code=eq.${encodedRoom}`
+  ];
+
+  endpoints.forEach((ep) => {
+    const url = `${SUPABASE_URL}/rest/v1/${ep}`;
+    try {
+      fetch(url, {
+        method: "DELETE",
+        headers: {
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": "Bearer " + SUPABASE_ANON_KEY,
+          "Content-Type": "application/json"
+        },
+        keepalive: Boolean(useKeepalive)
+      }).catch(() => {});
+    } catch (e) {}
+  });
+}
+window.purgeEntireRoomData = purgeEntireRoomData;
+
+// Immediate handler for tab close, refresh, or page hide
+function handleRiderLeaveOrUnload(isUnload = false) {
+  if (!currentSession || !currentSession.riderId || !currentSession.roomCode || currentSession.roomCode === "----") return;
+
+  const myRiderId = currentSession.riderId;
+  const cleanRoom = currentSession.roomCode.trim().toUpperCase();
+  const isLeader = Boolean(currentSession.isLeader);
+
+  // Broadcast rider_left or room_closed via Realtime
+  if (realtimeChannel) {
+    try {
+      realtimeChannel.send({
+        type: "broadcast",
+        event: isLeader ? "room_closed" : "rider_left",
+        payload: {
+          riderId: myRiderId,
+          riderName: currentSession.riderName || "Rider",
+          roomCode: cleanRoom
+        }
+      });
+    } catch (e) {}
+  }
+
+  // Immediately delete self from riders table with keepalive: true
+  const deleteSelfUrl = `${SUPABASE_URL}/rest/v1/riders?id=eq.${encodeURIComponent(myRiderId)}`;
+  try {
+    fetch(deleteSelfUrl, {
+      method: "DELETE",
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": "Bearer " + SUPABASE_ANON_KEY,
+        "Content-Type": "application/json"
+      },
+      keepalive: true
+    }).catch(() => {});
+  } catch (e) {}
+
+  // If leader leaves/closes, purge entire room data with keepalive
+  if (isLeader) {
+    purgeEntireRoomData(cleanRoom, true);
+  }
+}
+window.handleRiderLeaveOrUnload = handleRiderLeaveOrUnload;
+
+// Attach beforeunload and pagehide listeners to clean up on tab close
+window.addEventListener("beforeunload", () => {
+  handleRiderLeaveOrUnload(true);
+});
+window.addEventListener("pagehide", () => {
+  handleRiderLeaveOrUnload(true);
+});
 
 // Note: Avoid variable name collision with window.supabase from CDN
 let sbClient = null;
@@ -2226,31 +2344,63 @@ window.checkRoomLeaderStatus = async function(roomCode) {
 
   try {
     const res = await supabaseRest(
-      `riders?room_code=eq.${encodeURIComponent(cleanRoom)}&is_leader=eq.true&select=id,rider_name`,
+      `riders?room_code=eq.${encodeURIComponent(cleanRoom)}&select=id,rider_name,is_leader,updated_at`,
       "GET"
     );
 
-    if (Array.isArray(res) && res.length > 0) {
-      const activeLeader = res.find((r) => r && (!currentSession || r.id !== currentSession.riderId));
-      if (activeLeader) {
-        if (checkbox) {
-          checkbox.checked = false;
-          checkbox.disabled = true;
+    const now = Date.now();
+    const STALE_THRESHOLD_MS = 45000; // 45 seconds
+
+    const staleRiders = [];
+    const liveRiders = [];
+
+    if (Array.isArray(res)) {
+      res.forEach(r => {
+        if (!r || !r.id) return;
+        const time = r.updated_at ? new Date(r.updated_at).getTime() : 0;
+        if (isNaN(time) || (now - time > STALE_THRESHOLD_MS)) {
+          staleRiders.push(r);
+        } else {
+          liveRiders.push(r);
         }
-        if (noticeText) {
-          noticeText.textContent = `👑 Leader (${activeLeader.rider_name || "Captain"}) is already in this room — joining as Rider`;
-        }
-        if (notice) {
-          notice.classList.remove("hidden");
-        }
-        if (container) {
-          container.classList.add("opacity-60");
-        }
-        return activeLeader;
-      }
+      });
     }
 
-    // No active leader in room
+    // Auto-delete stale riders / dead leaders from Supabase database immediately!
+    if (staleRiders.length > 0) {
+      staleRiders.forEach(s => {
+        supabaseRest(`riders?id=eq.${encodeURIComponent(s.id)}`, "DELETE").catch(() => {});
+        console.log(`[Stale rider purged] ${s.rider_name || s.id} (inactive > 45s)`);
+      });
+    }
+
+    // If 0 live riders remain in this room, wipe old tour plans and dead data for complete fresh reuse!
+    if (liveRiders.length === 0) {
+      purgeEntireRoomData(cleanRoom, false);
+    }
+
+    // Only look for actively connected leaders (< 45s) other than current user
+    const otherLiveRiders = liveRiders.filter((r) => !currentSession || r.id !== currentSession.riderId);
+    const activeLeader = otherLiveRiders.find((r) => r.is_leader === true);
+
+    if (activeLeader) {
+      if (checkbox) {
+        checkbox.checked = false;
+        checkbox.disabled = true;
+      }
+      if (noticeText) {
+        noticeText.textContent = `👑 Leader (${activeLeader.rider_name || "Captain"}) is already in this room — joining as Rider`;
+      }
+      if (notice) {
+        notice.classList.remove("hidden");
+      }
+      if (container) {
+        container.classList.add("opacity-60");
+      }
+      return activeLeader;
+    }
+
+    // No active leader in room! Unlock & enable Ride Leader toggle
     if (checkbox) {
       checkbox.disabled = false;
     }
@@ -2263,6 +2413,9 @@ window.checkRoomLeaderStatus = async function(roomCode) {
     return null;
   } catch (err) {
     console.debug("[checkRoomLeaderStatus error]", err);
+    if (checkbox) checkbox.disabled = false;
+    if (notice) notice.classList.add("hidden");
+    if (container) container.classList.remove("opacity-60");
     return null;
   }
 };
@@ -2278,12 +2431,18 @@ async function enforceSingleLeaderForRoom(cleanRoom) {
   if (!cleanRoom || cleanRoom === "----" || !currentSession || !currentSession.riderId) return;
   try {
     const res = await supabaseRest(
-      `riders?room_code=eq.${encodeURIComponent(cleanRoom)}&select=id,rider_name,is_leader`,
+      `riders?room_code=eq.${encodeURIComponent(cleanRoom)}&select=id,rider_name,is_leader,updated_at`,
       "GET"
     );
     if (Array.isArray(res)) {
-      const otherRiders = res.filter((r) => r && r.id !== currentSession.riderId);
-      const existingLeader = otherRiders.find((r) => r.is_leader === true);
+      const now = Date.now();
+      const STALE_THRESHOLD_MS = 45000;
+      const otherLiveRiders = res.filter((r) => {
+        if (!r || r.id === currentSession.riderId) return false;
+        const time = r.updated_at ? new Date(r.updated_at).getTime() : 0;
+        return !isNaN(time) && (now - time <= STALE_THRESHOLD_MS);
+      });
+      const existingLeader = otherLiveRiders.find((r) => r.is_leader === true);
 
       if (existingLeader && currentSession.isLeader) {
         currentSession.isLeader = false;
@@ -2300,7 +2459,7 @@ async function enforceSingleLeaderForRoom(cleanRoom) {
         if (typeof showRadarToast === "function") {
           showRadarToast("CONVOY ROLE UPDATED", `ℹ️ Leader (${existingLeader.rider_name || "Captain"}) already exists in this room. Joined as Rider!`);
         }
-      } else if (otherRiders.length === 0 && !currentSession.isLeader) {
+      } else if (otherLiveRiders.length === 0 && !currentSession.isLeader) {
         currentSession.isLeader = true;
         try {
           sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(currentSession));
@@ -2345,11 +2504,17 @@ async function checkIfRoomClosedOrKicked() {
       if (myRowRes.length === 0) {
         // Rider row was removed from DB. Check if whole room was closed or single kick
         const roomRiders = await supabaseRest(
-          `riders?room_code=eq.${encodeURIComponent(cleanRoom)}&select=id,is_leader`,
+          `riders?room_code=eq.${encodeURIComponent(cleanRoom)}&select=id,is_leader,updated_at`,
           "GET"
         );
-        const hasLeader = Array.isArray(roomRiders) && roomRiders.some((r) => r.is_leader === true);
-        if (!hasLeader || roomRiders.length === 0) {
+        const now = Date.now();
+        const liveRoomRiders = (Array.isArray(roomRiders) ? roomRiders : []).filter((r) => {
+          if (!r) return false;
+          const time = r.updated_at ? new Date(r.updated_at).getTime() : 0;
+          return !isNaN(time) && (now - time <= 45000);
+        });
+        const hasLeader = liveRoomRiders.some((r) => r.is_leader === true);
+        if (!hasLeader || liveRoomRiders.length === 0) {
           return { kicked: false, roomClosed: true };
         }
         return { kicked: true, roomClosed: false };
@@ -2366,15 +2531,21 @@ async function checkIfRoomClosedOrKicked() {
       }
     }
 
-    // 2. Check if room still has an active leader
+    // 2. Check if room still has an active leader (< 45s)
     const roomCheck = await supabaseRest(
-      `riders?room_code=eq.${encodeURIComponent(cleanRoom)}&select=id,is_leader`,
+      `riders?room_code=eq.${encodeURIComponent(cleanRoom)}&select=id,is_leader,updated_at`,
       "GET"
     );
 
     if (Array.isArray(roomCheck)) {
-      const hasLeader = roomCheck.some((r) => r.is_leader === true);
-      if (roomCheck.length === 0 || !hasLeader) {
+      const now = Date.now();
+      const liveRiders = roomCheck.filter((r) => {
+        if (!r) return false;
+        const time = r.updated_at ? new Date(r.updated_at).getTime() : 0;
+        return !isNaN(time) && (now - time <= 45000);
+      });
+      const hasLeader = liveRiders.some((r) => r.is_leader === true);
+      if (liveRiders.length === 0 || !hasLeader) {
         return { kicked: false, roomClosed: true };
       }
     }
@@ -2836,24 +3007,53 @@ async function fetchExistingRiders() {
     );
 
     if (Array.isArray(riders)) {
-      // Requirement 2: If regular rider is in room and room returns 0 riders or has NO leader, trigger room closure
+      const now = Date.now();
+      const STALE_THRESHOLD_MS = 45000; // 45 seconds
+
+      const staleRiders = [];
+      const liveRiders = [];
+
+      riders.forEach((r) => {
+        if (!r || !r.id) return;
+        if (r.id === currentSession.riderId) {
+          liveRiders.push(r);
+          return;
+        }
+        if ((r.room_code || "").startsWith("KICKED_") || (r.room_code || "").startsWith("CLOSED_")) return;
+        if (window.kickedRiderIds && window.kickedRiderIds.has(r.id)) return;
+
+        const time = r.updated_at ? new Date(r.updated_at).getTime() : 0;
+        if (isNaN(time) || (now - time > STALE_THRESHOLD_MS)) {
+          staleRiders.push(r);
+        } else {
+          liveRiders.push(r);
+        }
+      });
+
+      // Auto-purge stale riders from Supabase database and clear their map markers
+      if (staleRiders.length > 0) {
+        staleRiders.forEach((s) => {
+          supabaseRest(`riders?id=eq.${encodeURIComponent(s.id)}`, "DELETE").catch(() => {});
+          if (allConvoyRiders.has(s.id)) {
+            allConvoyRiders.delete(s.id);
+            removeRemoteRiderMarker(s.id);
+          }
+        });
+      }
+
+      // Check if regular rider is in room and room has NO live leader (< 45s)
       if (hasJoinedDB && !currentSession.isLeader) {
-        const hasLeader = riders.some((r) => r && r.is_leader === true);
-        if (riders.length === 0 || !hasLeader) {
+        const hasLiveLeader = liveRiders.some((r) => r.is_leader === true);
+        if (liveRiders.length === 0 || !hasLiveLeader) {
           handleRoomClosedByLeader();
-          return { success: false, error: "Leader closed room" };
+          return { success: false, error: "Leader closed room or disconnected" };
         }
       }
 
       const activeDbIds = new Set();
 
-      riders.forEach((r) => {
-        if (!r || !r.id) return;
-        if (r.id === currentSession.riderId) return;
-        if ((r.room_code || "").startsWith("KICKED_") || (r.room_code || "").startsWith("CLOSED_")) return;
-        if (window.kickedRiderIds && window.kickedRiderIds.has(r.id)) return;
-
-        // Render ALL rows returned directly without client clock-skew filtering
+      liveRiders.forEach((r) => {
+        if (!r || !r.id || r.id === currentSession.riderId) return;
         if (r.lat !== undefined && r.lat !== null && r.lng !== undefined && r.lng !== null) {
           activeDbIds.add(r.id);
           allConvoyRiders.set(r.id, r);
@@ -3106,6 +3306,14 @@ function joinSupabaseRoom(roomCode) {
           if (payload && payload.riderId === currentSession.riderId) {
             handleKickedFromConvoy();
           } else if (payload && payload.riderId) {
+            allConvoyRiders.delete(payload.riderId);
+            removeRemoteRiderMarker(payload.riderId);
+            evaluateConvoyDistances();
+            updateRidersCount();
+          }
+        })
+        .on("broadcast", { event: "rider_left" }, ({ payload }) => {
+          if (payload && payload.riderId) {
             allConvoyRiders.delete(payload.riderId);
             removeRemoteRiderMarker(payload.riderId);
             evaluateConvoyDistances();
@@ -3812,59 +4020,49 @@ async function clearSession() {
       }
     }
 
-    // 2. PATCH all riders in that room with room_code = 'CLOSED_' + cleanRoom
-    const closedRoomCode = "CLOSED_" + cleanRoom;
-    try {
-      await supabaseRest(
-        `riders?room_code=eq.${encodeURIComponent(cleanRoom)}`,
-        "PATCH",
-        { room_code: closedRoomCode }
-      );
-    } catch (patchErr) {
-      console.debug("[Patch room_code to CLOSED_ error]", patchErr);
-    }
-
-    // 3. DELETE all rows in that room via both supabaseRest and sbClient
-    try {
-      await supabaseRest(
-        `riders?room_code=eq.${encodeURIComponent(cleanRoom)}`,
-        "DELETE"
-      );
-    } catch (delErr1) {
-      console.debug("[Delete cleanRoom error]", delErr1);
-    }
-
-    try {
-      await supabaseRest(
-        `riders?room_code=eq.${encodeURIComponent(closedRoomCode)}`,
-        "DELETE"
-      );
-    } catch (delErr2) {
-      console.debug("[Delete closedRoomCode error]", delErr2);
-    }
+    // 2. Purge entire room data (riders, tour_plans, police_reports, police_alerts)
+    purgeEntireRoomData(cleanRoom, false);
 
     if (sbClient) {
       try {
         await sbClient.from("riders").delete().eq("room_code", cleanRoom);
-      } catch (sbDelErr1) {
-        console.debug("[sbClient delete cleanRoom error]", sbDelErr1);
-      }
-      try {
-        await sbClient.from("riders").delete().eq("room_code", closedRoomCode);
-      } catch (sbDelErr2) {
-        console.debug("[sbClient delete closedRoomCode error]", sbDelErr2);
-      }
+      } catch (e) {}
     }
 
-    // 4. Show toast for room closure
+    // 3. Show toast for room closure
     if (typeof showRadarToast === "function") {
       showRadarToast("CONVOY CLOSED", "🏁 Convoy Room Closed. All riders have been disconnected.");
     }
   } else if (myRiderId) {
-    // Regular Rider (isLeader === false): only delete their own row
+    // Regular Rider (isLeader === false): broadcast rider_left
+    if (realtimeChannel) {
+      try {
+        realtimeChannel.send({
+          type: "broadcast",
+          event: "rider_left",
+          payload: {
+            riderId: myRiderId,
+            riderName: currentSession.riderName || "Rider",
+            roomCode: cleanRoom
+          }
+        });
+      } catch (e) {}
+    }
+
+    // Immediately delete self from riders table
+    const deleteSelfUrl = `${SUPABASE_URL}/rest/v1/riders?id=eq.${encodeURIComponent(myRiderId)}`;
     try {
-      supabaseRest(`riders?id=eq.${encodeURIComponent(myRiderId)}`, "DELETE").catch(() => {});
+      fetch(deleteSelfUrl, {
+        method: "DELETE",
+        headers: {
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": "Bearer " + SUPABASE_ANON_KEY,
+          "Content-Type": "application/json"
+        },
+        keepalive: true
+      }).catch(() => {});
     } catch (e) {}
+
     if (sbClient) {
       sbClient
         .from("riders")
@@ -3873,6 +4071,19 @@ async function clearSession() {
         .then(() => {})
         .catch(() => {});
     }
+
+    // If 0 active riders remain (<45s) after leaving, purge entire room
+    if (cleanRoom && cleanRoom !== "----") {
+      try {
+        const remaining = await supabaseRest(`riders?room_code=eq.${encodeURIComponent(cleanRoom)}&select=id,updated_at`);
+        const now = Date.now();
+        const activeRemaining = (remaining || []).filter(r => r.id !== myRiderId && r.updated_at && (now - new Date(r.updated_at).getTime()) <= 45000);
+        if (activeRemaining.length === 0) {
+          purgeEntireRoomData(cleanRoom, false);
+        }
+      } catch (e) {}
+    }
+
     if (typeof showRadarToast === "function") {
       showRadarToast("CONVOY EXITED", "👋 You have left the convoy tour.");
     }
@@ -3880,6 +4091,10 @@ async function clearSession() {
 
   try {
     sessionStorage.removeItem(SESSION_STORAGE_KEY);
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+    localStorage.removeItem("cg_room_code");
+    localStorage.removeItem("cg_rider_name");
+    localStorage.removeItem("cg_is_leader");
   } catch (e) {}
 
   if (dualSyncInterval) {
@@ -3948,6 +4163,27 @@ async function clearSession() {
     roomCode: "",
     isLeader: false
   };
+
+  // Generate a brand-new random room code on exit
+  const freshRoom = generateRoomCode();
+  const roomCodeInput = document.getElementById("roomCodeInput");
+  if (roomCodeInput) {
+    roomCodeInput.value = freshRoom;
+  }
+  const riderNameInput = document.getElementById("riderNameInput");
+  if (riderNameInput) {
+    riderNameInput.value = "";
+  }
+  // Automatically unlock and enable the Ride Leader toggle for the new room
+  const isLeaderCheckbox = document.getElementById("isLeaderCheckbox");
+  if (isLeaderCheckbox) {
+    isLeaderCheckbox.disabled = false;
+    isLeaderCheckbox.checked = true;
+  }
+  const leaderWarning = document.getElementById("leaderWarning");
+  if (leaderWarning) {
+    leaderWarning.classList.add("hidden");
+  }
 
   showOnboardingModal(true);
 }
@@ -6385,14 +6621,13 @@ function initApp() {
   const isLeaderCheckbox = document.getElementById("isLeaderCheckbox");
   const generateCodeBtn = document.getElementById("generateCodeBtn");
 
-  // Keep Rider Name blank and Leader toggle unchecked on startup for a clean form
+  // Keep Rider Name blank on startup for a clean form
   if (riderNameInput) riderNameInput.value = "";
-  if (isLeaderCheckbox) isLeaderCheckbox.checked = false;
 
   // Controls & Drawer
   const recenterBtn = document.getElementById("recenterBtn");
   const reportPoliceBtn = document.getElementById("reportPoliceBtn");
-  const leaveTourBtn = document.getElementById("leaveTourBtn");
+  const leaveTourBtn = document.getElementById("leaveTourBtn") || document.getElementById("exitRoomBtn");
   const simModeToggleBtn = document.getElementById("simModeToggleBtn");
   const openRidersDrawerBtn = document.getElementById("openRidersDrawerBtn");
   const closeRidersDrawerBtn = document.getElementById("closeRidersDrawerBtn");
@@ -6465,6 +6700,12 @@ function initApp() {
       playSound("click");
       if (roomCodeInput) {
         roomCodeInput.value = generateRoomCode();
+        if (isLeaderCheckbox) {
+          isLeaderCheckbox.disabled = false;
+          isLeaderCheckbox.checked = true;
+        }
+        const leaderWarning = document.getElementById("leaderWarning");
+        if (leaderWarning) leaderWarning.classList.add("hidden");
         if (typeof window.checkRoomLeaderStatus === "function") {
           window.checkRoomLeaderStatus(roomCodeInput.value);
         }
@@ -6915,42 +7156,62 @@ function initApp() {
     console.warn("Leaflet Map init error handled:", err);
   }
 
-  // 4. Check URL Invite (?room=...) & Existing Session & Initialize
+  // 4. Check URL Invite (?room=...) & Setup Fresh Startup Room & Onboarding
   try {
     const urlParams = new URLSearchParams(window.location.search);
-    const roomParam = urlParams.get("room") || urlParams.get("room_code");
-    loadSavedSession();
+    const roomParam = (urlParams.get("room") || urlParams.get("room_code") || "").trim().toUpperCase();
 
     // 1. Strictly keep Rider Call-Sign / Name input blank on load (placeholder visible)
     if (riderNameInput) {
       riderNameInput.value = "";
     }
 
-    // 2. Reset Ride Leader toggle to unchecked (false) by default
-    if (isLeaderCheckbox) {
-      isLeaderCheckbox.checked = false;
-    }
-
-    // 3. Pre-fill room code if available from previous session, localStorage, or invite URL
-    let prefillRoom = (currentSession && currentSession.roomCode && currentSession.roomCode !== "----") ? currentSession.roomCode : "";
-    try {
-      if (!prefillRoom) prefillRoom = localStorage.getItem("cg_room_code") || "";
-    } catch (e) {}
-
-    // Check if an invite link parameter was provided (?room=...)
     if (roomParam) {
-      prefillRoom = roomParam.trim().toUpperCase();
-      console.log("Tour room invite parameter detected from URL:", prefillRoom);
-      showRadarToast("CONVOY INVITE DETECTED", `Room ${prefillRoom} pre-filled! Enter your name & hit Start Riding.`);
-    }
+      // Invite link detected: pre-fill the invited room code
+      if (roomCodeInput) {
+        roomCodeInput.value = roomParam;
+      }
+      // Rider is joining someone else's room: default to regular rider
+      if (isLeaderCheckbox) {
+        isLeaderCheckbox.disabled = false;
+        isLeaderCheckbox.checked = false;
+      }
+      if (typeof window.checkRoomLeaderStatus === "function") {
+        window.checkRoomLeaderStatus(roomParam);
+      }
+      showRadarToast("CONVOY INVITE DETECTED", `Room ${roomParam} pre-filled! Enter your name & hit Start Riding.`);
+    } else {
+      // Fresh start / normal load: clear stale session storage keys
+      try {
+        sessionStorage.removeItem(SESSION_STORAGE_KEY);
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+        localStorage.removeItem("cg_room_code");
+        localStorage.removeItem("cg_rider_name");
+        localStorage.removeItem("cg_is_leader");
+      } catch (e) {}
 
-    if (roomCodeInput && prefillRoom) {
-      roomCodeInput.value = prefillRoom;
-    }
+      currentSession = {
+        riderId: generateUUID(),
+        riderName: "",
+        roomCode: "",
+        isLeader: false
+      };
 
-    // Check room leader status if room code is present
-    if (prefillRoom && typeof window.checkRoomLeaderStatus === "function") {
-      window.checkRoomLeaderStatus(prefillRoom);
+      // Generate a brand-new random room code on fresh load
+      const freshRoom = generateRoomCode();
+      if (roomCodeInput) {
+        roomCodeInput.value = freshRoom;
+      }
+
+      // Unlock and enable Ride Leader toggle by default for the new room
+      if (isLeaderCheckbox) {
+        isLeaderCheckbox.disabled = false;
+        isLeaderCheckbox.checked = true;
+      }
+      const leaderWarning = document.getElementById("leaderWarning");
+      if (leaderWarning) {
+        leaderWarning.classList.add("hidden");
+      }
     }
 
     // ALWAYS display the onboarding modal first on initial boot/reload!
@@ -6959,7 +7220,10 @@ function initApp() {
   } catch (err) {
     console.warn("Startup onboarding setup error handled:", err);
     if (riderNameInput) riderNameInput.value = "";
-    if (isLeaderCheckbox) isLeaderCheckbox.checked = false;
+    if (isLeaderCheckbox) {
+      isLeaderCheckbox.disabled = false;
+      isLeaderCheckbox.checked = true;
+    }
     window.openJoinModal();
   }
 
