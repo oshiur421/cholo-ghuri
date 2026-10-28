@@ -237,14 +237,16 @@ body {
 
 .leaflet-container,
 .leaflet-pane,
-.leaflet-tile-pane {
+.leaflet-tile-pane,
+.leaflet-tile {
   opacity: 1 !important;
   visibility: visible !important;
+  filter: none !important;
 }
 
-/* Mapbox Navigation Night is natively dark mode; no invert filter needed */
-.leaflet-tile-pane {
-  filter: none;
+body.map-day-mode #map,
+body.map-day-mode .leaflet-container {
+  background: #e5e7eb !important;
 }
 
 .hud-top-bar {

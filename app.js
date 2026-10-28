@@ -7,55 +7,65 @@
 // 0. GUARANTEED FAILSAFE LEAFLET MAP INITIALIZER & ACTION HANDLERS
 // ==========================================
 const mapboxToken = 'pk.eyJ1Ijoib3NoaXVyMjQyIiwiYSI6ImNtdnNkaDluazA1NnAzMHF3dnZoc3o4ODgifQ.HNHHnUivjVDOU7z99iX3lg';
-const MAPBOX_TRAFFIC_URLS = {
-  night: `https://api.mapbox.com/styles/v1/mapbox/traffic-night-v2/tiles/512/{z}/{x}/{y}?access_token=${mapboxToken}`,
-  day: `https://api.mapbox.com/styles/v1/mapbox/traffic-day-v2/tiles/512/{z}/{x}/{y}?access_token=${mapboxToken}`
-};
-
-let baseMapLayer = null;
-window.baseMapLayer = null;
-
 let currentMapTheme = 'night';
 try {
   currentMapTheme = localStorage.getItem('cholo_map_theme') || 'night';
 } catch (e) {}
 
-window.setMapTheme = function(theme) {
-  if (theme !== 'night' && theme !== 'day') theme = 'night';
-  currentMapTheme = theme;
+window.currentMapTileLayer = null;
+window.baseMapLayer = null;
+
+function applyMapTheme(theme) {
+  currentMapTheme = (theme === 'day') ? 'day' : 'night';
   try {
     localStorage.setItem('cholo_map_theme', currentMapTheme);
   } catch (e) {}
 
-  const targetTileUrl = MAPBOX_TRAFFIC_URLS[currentMapTheme] || MAPBOX_TRAFFIC_URLS.night;
-  const targetLayer = window.baseMapLayer || baseMapLayer;
-  if (targetLayer && typeof targetLayer.setUrl === 'function') {
-    targetLayer.setUrl(targetTileUrl);
+  const styleId = currentMapTheme === 'day' ? 'traffic-day-v2' : 'traffic-night-v2';
+  const tileUrl = `https://api.mapbox.com/styles/v1/mapbox/${styleId}/tiles/512/{z}/{x}/{y}?access_token=${mapboxToken}`;
+
+  const targetMap = window.map || (typeof map !== 'undefined' ? map : null);
+  if (window.currentMapTileLayer && targetMap) {
+    try {
+      targetMap.removeLayer(window.currentMapTileLayer);
+    } catch (e) {}
+  }
+  if (targetMap) {
+    window.currentMapTileLayer = L.tileLayer(tileUrl, {
+      maxZoom: 19,
+      tileSize: 512,
+      zoomOffset: -1,
+      attribution: '© Mapbox'
+    }).addTo(targetMap);
+    window.currentMapTileLayer.bringToBack();
+    window.baseMapLayer = window.currentMapTileLayer;
   }
 
-  // Update button UI
-  const themeBtn = document.getElementById('mapThemeToggleBtn');
-  if (themeBtn) {
-    const nightOpt = themeBtn.querySelector('.night-opt');
-    const dayOpt = themeBtn.querySelector('.day-opt');
-    if (currentMapTheme === 'day') {
-      themeBtn.classList.add('day-active');
-      if (nightOpt) nightOpt.classList.remove('active');
-      if (dayOpt) dayOpt.classList.add('active');
-    } else {
-      themeBtn.classList.remove('day-active');
-      if (nightOpt) nightOpt.classList.add('active');
-      if (dayOpt) dayOpt.classList.remove('active');
-    }
-  }
-};
+  document.body.classList.toggle('map-day-mode', currentMapTheme === 'day');
 
+  const btn = document.getElementById('mapThemeToggleBtn');
+  if (btn) {
+    btn.classList.toggle('day-active', currentMapTheme === 'day');
+    const nightOpt = btn.querySelector('.night-opt');
+    const dayOpt = btn.querySelector('.day-opt');
+    if (nightOpt) nightOpt.classList.toggle('active', currentMapTheme === 'night');
+    if (dayOpt) dayOpt.classList.toggle('active', currentMapTheme === 'day');
+  }
+}
+window.applyMapTheme = applyMapTheme;
+window.setMapTheme = applyMapTheme;
+
+let isTogglingTheme = false;
 window.toggleMapTheme = function() {
+  if (isTogglingTheme) return;
+  isTogglingTheme = true;
+  setTimeout(() => { isTogglingTheme = false; }, 250);
+
   const nextTheme = currentMapTheme === 'night' ? 'day' : 'night';
-  window.setMapTheme(nextTheme);
+  applyMapTheme(nextTheme);
   if (typeof playSound === 'function') playSound('click');
   if (typeof showRadarToast === 'function') {
-    showRadarToast('MAP THEME', nextTheme === 'day' ? '☀️ Daytime Traffic Mode Activated' : '🌙 Night Traffic Mode Activated');
+    showRadarToast('MAP THEME', nextTheme === 'day' ? '☀️ Day Traffic Mode Activated' : '🌙 Night Traffic Mode Activated');
   }
 };
 
@@ -72,22 +82,10 @@ window.ensureLeafletMap = function() {
     mapEl.innerHTML = '';
   }
   window.map = L.map('map', { zoomControl: false, attributionControl: true }).setView([23.8103, 90.4125], 13);
-  
-  const initialTileUrl = MAPBOX_TRAFFIC_URLS[currentMapTheme] || MAPBOX_TRAFFIC_URLS.night;
-  baseMapLayer = L.tileLayer(initialTileUrl, {
-    maxZoom: 20,
-    tileSize: 512,
-    zoomOffset: -1,
-    attribution: '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a>'
-  }).addTo(window.map);
-  window.baseMapLayer = baseMapLayer;
+  map = window.map;
 
-  // Sync button UI with current theme on map load
-  setTimeout(() => {
-    if (typeof window.setMapTheme === 'function') {
-      window.setMapTheme(currentMapTheme);
-    }
-  }, 100);
+  // Apply saved theme (creates single window.currentMapTileLayer and brings to back)
+  applyMapTheme(currentMapTheme);
 
   setTimeout(() => window.map.invalidateSize(), 150);
   setTimeout(() => window.map.invalidateSize(), 600);
@@ -6987,8 +6985,8 @@ function initApp() {
       window.toggleMapTheme();
     });
   }
-  if (typeof window.setMapTheme === "function") {
-    window.setMapTheme(currentMapTheme);
+  if (typeof applyMapTheme === "function") {
+    applyMapTheme(currentMapTheme);
   }
 
   // Police Report Button
