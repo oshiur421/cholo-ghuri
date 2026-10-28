@@ -244,9 +244,193 @@ body {
   filter: none !important;
 }
 
+/* ========================================================
+   DAY MODE HIGH-CONTRAST THEME (body.map-day-mode)
+   ======================================================== */
+body.map-day-mode {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
 body.map-day-mode #map,
 body.map-day-mode .leaflet-container {
   background: #e5e7eb !important;
+}
+
+/* 1. Panels & Cards in Day Mode */
+body.map-day-mode .glass-panel,
+body.map-day-mode .glass-panel-neon,
+body.map-day-mode #currentRoadBanner,
+body.map-day-mode #subRoadAlertSection .sub-road-alert-card,
+body.map-day-mode #bottomControlBar,
+body.map-day-mode #bottomControlBar .glass-panel {
+  background: rgba(255, 255, 255, 0.94) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border-color: rgba(15, 23, 42, 0.16) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+  color: #0f172a !important;
+}
+
+/* 2. Top Row 1: Brand & Status Text */
+body.map-day-mode .hud-top-bar span.text-slate-100,
+body.map-day-mode .hud-top-bar span.font-cyber {
+  color: #0f172a !important;
+}
+body.map-day-mode #activeRoomCode {
+  color: #047857 !important;
+  font-weight: 800 !important;
+}
+body.map-day-mode #topJoinRoomBtn {
+  background: rgba(16, 185, 129, 0.15) !important;
+  border-color: rgba(5, 150, 105, 0.4) !important;
+  color: #047857 !important;
+}
+body.map-day-mode #topShareRoomBtn {
+  background: rgba(2, 132, 199, 0.12) !important;
+  border-color: rgba(2, 132, 199, 0.35) !important;
+  color: #0369a1 !important;
+}
+
+/* 3. Speedometer & Speed Limit in Day Mode */
+body.map-day-mode #liveSpeedDisplay {
+  color: #047857 !important;
+  text-shadow: none !important;
+}
+body.map-day-mode #speedStatusLabel {
+  color: #059669 !important;
+}
+body.map-day-mode .hud-top-bar span.text-slate-400 {
+  color: #475569 !important;
+}
+
+/* 4. Row 2: Current Road Banner in Day Mode */
+body.map-day-mode #currentRoadBanner {
+  background: rgba(255, 255, 255, 0.94) !important;
+  border-color: rgba(16, 185, 129, 0.4) !important;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.1) !important;
+}
+body.map-day-mode #currentRoadBanner span.uppercase {
+  color: #047857 !important;
+  font-weight: 800 !important;
+}
+body.map-day-mode #currentRoadName,
+body.map-day-mode .hud-road-text {
+  color: #0f172a !important;
+  font-weight: 800 !important;
+}
+body.map-day-mode #currentRoadBanner .fa-location-arrow {
+  color: #047857 !important;
+}
+body.map-day-mode #currentRoadBanner .bg-emerald-500\/10 {
+  background: rgba(16, 185, 129, 0.15) !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+
+/* 5. Theme Toggle Button in Day Mode */
+body.map-day-mode .theme-toggle-btn {
+  background: rgba(255, 255, 255, 0.96) !important;
+  border-color: rgba(217, 119, 6, 0.45) !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08) !important;
+  color: #475569 !important;
+}
+body.map-day-mode .theme-toggle-btn .night-opt {
+  color: #64748b !important;
+  text-shadow: none !important;
+}
+body.map-day-mode .theme-toggle-btn .day-opt.active {
+  color: #b45309 !important;
+  font-weight: 800 !important;
+  text-shadow: none !important;
+}
+body.map-day-mode .theme-divider {
+  color: #94a3b8 !important;
+}
+
+/* 6. Tour & Group Buttons in Day Mode */
+body.map-day-mode #openTourPlannerBtn,
+body.map-day-mode #openTourBtn {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-color: rgba(2, 132, 199, 0.4) !important;
+  color: #0369a1 !important;
+  box-shadow: 0 2px 10px rgba(2, 132, 199, 0.12) !important;
+}
+body.map-day-mode #openTourPlannerBtn span.text-cyan-300,
+body.map-day-mode #openTourBtn span.text-cyan-300 {
+  color: #0284c7 !important;
+  font-weight: 800 !important;
+}
+body.map-day-mode #topRidersCountBtn,
+body.map-day-mode #groupMembersBtn {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-color: rgba(16, 185, 129, 0.45) !important;
+  color: #065f46 !important;
+  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.12) !important;
+}
+body.map-day-mode #topRidersCountBtn span.font-cyber,
+body.map-day-mode #groupMembersBtn span.font-cyber {
+  color: #047857 !important;
+  font-weight: 800 !important;
+}
+body.map-day-mode #topRidersCountBtn .fa-chevron-right,
+body.map-day-mode #groupMembersBtn .fa-chevron-right {
+  color: #475569 !important;
+}
+
+/* 7. Sub-Road Alert Cards in Day Mode */
+body.map-day-mode #subRoadAlertSection .sub-road-alert-card {
+  background: rgba(255, 255, 255, 0.96) !important;
+  border-color: rgba(2, 132, 199, 0.35) !important;
+  color: #0f172a !important;
+}
+body.map-day-mode #subRoadAlertSection .alert-card-label {
+  color: #0284c7 !important;
+}
+body.map-day-mode #subRoadAlertSection .alert-card-subtext {
+  color: #475569 !important;
+}
+body.map-day-mode #subRoadAlertSection #tourSubgroupTag {
+  background: rgba(2, 132, 199, 0.12) !important;
+  color: #0369a1 !important;
+  border-color: rgba(2, 132, 199, 0.3) !important;
+}
+
+/* 8. Bottom Bar Controls in Day Mode */
+body.map-day-mode #bottomControlBar {
+  background: rgba(255, 255, 255, 0.94) !important;
+  border-color: rgba(15, 23, 42, 0.18) !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15) !important;
+}
+body.map-day-mode #bottomControlBar .glove-btn {
+  background: rgba(241, 245, 249, 0.9) !important;
+  border-color: rgba(15, 23, 42, 0.14) !important;
+  color: #1e293b !important;
+}
+body.map-day-mode #bottomControlBar .glove-btn:hover {
+  background: #ffffff !important;
+  border-color: #047857 !important;
+  color: #047857 !important;
+}
+body.map-day-mode #recenterBtn i {
+  color: #1e293b !important;
+}
+body.map-day-mode #recenterBtn.border-emerald-500\/60 i {
+  color: #047857 !important;
+}
+body.map-day-mode #reportPoliceBtn {
+  background: linear-gradient(135deg, #0284c7, #0369a1) !important;
+  color: #ffffff !important;
+}
+body.map-day-mode #reportPoliceBtn span.text-cyan-300 {
+  color: #e0f2fe !important;
+}
+body.map-day-mode #leaveTourBtn {
+  color: #b91c1c !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+body.map-day-mode #leaveTourBtn:hover {
+  background: rgba(254, 226, 226, 0.8) !important;
+  color: #991b1b !important;
 }
 
 .hud-top-bar {
@@ -692,7 +876,7 @@ body.map-day-mode .leaflet-container {
   }
 
   .hud-road-text {
-    max-width: calc(100vw - 190px);
+    max-width: 100%;
   }
 
   .hud-bottom-bar,
@@ -737,8 +921,8 @@ body.map-day-mode .leaflet-container {
   }
 
   .hud-road-text {
-    max-width: calc(100vw - 160px) !important;
-    font-size: 10px !important;
+    max-width: 100% !important;
+    font-size: 10.5px !important;
   }
 
   .hud-bottom-bar,
@@ -901,19 +1085,25 @@ body.map-day-mode .leaflet-container {
 
 /* ==================== CURRENT ROAD BANNER ==================== */
 #currentRoadBanner {
+  flex: 1 1 0% !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
   display: flex !important;
   align-items: center !important;
-  gap: 10px !important;
-  padding: 6px 14px !important;
+  gap: 8px !important;
+  padding: 6px 12px !important;
   box-sizing: border-box !important;
-  min-height: 44px;
-  width: auto !important;
-  min-width: 0 !important;
+  min-height: 42px;
   position: relative;
   transition: all 0.25s ease;
 }
 
-#currentRoadName {
+#currentRoadName,
+.hud-road-text {
+  flex: 1 1 auto;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
   display: block;
   font-family: 'Share Tech Mono', monospace, sans-serif;
   font-weight: 700;
@@ -1201,12 +1391,14 @@ body.map-day-mode .leaflet-container {
 /* Mobile Responsive Fit */
 @media (max-width: 640px) {
   #currentRoadBanner {
-    padding: 5px 10px !important;
-    gap: 8px !important;
+    padding: 4px 8px !important;
+    gap: 6px !important;
+    min-height: 38px !important;
   }
 
-  #currentRoadName {
-    font-size: 11.5px;
+  #currentRoadName,
+  .hud-road-text {
+    font-size: 11px !important;
   }
 
   .sub-road-alert-card {
@@ -2032,9 +2224,24 @@ body.map-day-mode .leaflet-container {
 
 @media (max-width: 640px) {
   .theme-toggle-btn {
-    padding: 5px 8px;
-    font-size: 9.5px;
-    gap: 4px;
+    padding: 4px 7px;
+    font-size: 9px;
+    gap: 3px;
+    flex-shrink: 0 !important;
+  }
+  #openTourPlannerBtn,
+  #openTourBtn {
+    padding: 4px 7px !important;
+    font-size: 9px !important;
+    gap: 3px !important;
+    flex-shrink: 0 !important;
+  }
+  #topRidersCountBtn,
+  #groupMembersBtn {
+    padding: 4px 7px !important;
+    font-size: 9px !important;
+    gap: 3px !important;
+    flex-shrink: 0 !important;
   }
 }
 
