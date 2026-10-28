@@ -398,6 +398,10 @@
             <button id="openTourPlannerFromStripBtn" type="button" class="sub-alert-btn sub-alert-btn-min" title="Edit Tour Plan">
               <i class="fa-solid fa-map text-[10px]"></i>
             </button>
+            <button id="endTourFromStripBtn" type="button" class="sub-alert-btn sub-alert-btn-action sub-alert-btn-rose" title="End & Clear Active Tour">
+              <i class="fa-solid fa-trash-can text-[10px]"></i>
+              <span>END TOUR</span>
+            </button>
             <button id="minimizeTourProgressBtn" type="button" class="sub-alert-btn sub-alert-btn-min" title="Minimize Tour Progress">
               <i class="fa-solid fa-minus text-[10px]"></i>
             </button>
@@ -1152,10 +1156,11 @@
             <button 
               type="button" 
               id="clearTourPlanBtn" 
-              title="Clear all waypoints"
-              class="py-2 px-3 rounded-xl bg-slate-800 hover:bg-red-950/40 active:scale-95 text-slate-400 hover:text-red-400 border border-slate-700 hover:border-red-500/40 font-cyber font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
+              title="Clear all waypoints & end tour"
+              class="py-2 px-3.5 rounded-xl bg-red-950/60 hover:bg-red-900/80 active:scale-95 text-rose-300 hover:text-white border border-red-500/60 hover:border-red-400 font-cyber font-bold text-xs uppercase tracking-wider transition-all shadow-[0_0_15px_rgba(239,68,68,0.3)] flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <i class="fa-solid fa-trash-can text-xs"></i>
+              <span>🗑️ CLEAR ALL / END TOUR</span>
             </button>
           </div>
         </div>

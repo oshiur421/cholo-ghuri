@@ -4838,6 +4838,7 @@ if (document.readyState === "loading") {
 // ==========================================
 
 let activeTourPlan = null;
+window.activeTourPlan = null;
 let tourBuilderWaypoints = [];
 let tourRouteLayerGroup = null;
 let tourRoutePolyline = null;
@@ -4849,6 +4850,14 @@ let isTourProgressMinimized = false;
 let activeProximityStopId = null;
 let lastProximityChimeTime = 0;
 let nominatimSearchDebounceTimer = null;
+
+const clearedTourIds = new Set();
+let lastClearedTourTimestamp = 0;
+try {
+  const savedClearedTime = sessionStorage.getItem("cg_last_cleared_tour_time");
+  if (savedClearedTime) lastClearedTourTimestamp = parseInt(savedClearedTime, 10) || 0;
+} catch (e) {}
+window.lastClearedTourTimestamp = lastClearedTourTimestamp;
 
 // Major Bangladeshi Highway Tour Presets
 const BANGLADESH_PRESETS = [
@@ -5096,9 +5105,13 @@ function renderWaypointBuilderList() {
 
   if (tourBuilderWaypoints.length === 0) {
     container.innerHTML = `
-      <div class="p-6 text-center rounded-xl bg-slate-950/60 border border-dashed border-slate-800 text-slate-500 text-xs font-cyber">
-        <i class="fa-solid fa-route text-2xl text-slate-600 mb-2 block"></i>
-        No waypoints added yet. Tap quick presets above or click "+ Add Stoppage" to start planning!
+      <div class="p-6 text-center rounded-xl bg-slate-950/60 border border-dashed border-slate-800 text-slate-400 text-xs font-cyber space-y-2">
+        <i class="fa-solid fa-route text-2xl text-slate-600 mb-1 block"></i>
+        <div class="text-slate-300 font-bold uppercase tracking-wider">No Waypoints in Route</div>
+        <p class="text-[11px] text-slate-500">Tap quick presets above or click "+ Add Stoppage" to start planning!</p>
+        <button type="button" onclick="window.addWaypoint()" class="mt-2 px-3.5 py-1.5 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-xs font-bold hover:bg-cyan-500/30 active:scale-95 transition-all cursor-pointer inline-flex items-center gap-1.5">
+          <i class="fa-solid fa-plus text-[10px]"></i> Add First Stop (Point A)
+        </button>
       </div>
     `;
     updateTourPlanSummaryEstimate();
@@ -5397,7 +5410,11 @@ window.addWaypoint = function(name = "", lat = null, lng = null, type = "regroup
 window.removeWaypoint = function(index) {
   if (index >= 0 && index < tourBuilderWaypoints.length) {
     tourBuilderWaypoints.splice(index, 1);
+    if (tourBuilderWaypoints.length > 0 && index === 0) {
+      tourBuilderWaypoints[0].type = "start";
+    }
     renderWaypointBuilderList();
+    playSound("click");
   }
 };
 
@@ -5463,15 +5480,6 @@ window.openTourPlanner = function() {
   } else {
     if (nameInput && !nameInput.value) {
       nameInput.value = `${currentSession.roomCode || "Convoy"} Tour Plan`;
-    }
-    if (tourBuilderWaypoints.length === 0) {
-      // Default initial 2-stop route (Dhaka -> Bandarban)
-      tourBuilderWaypoints = [
-        { id: "wp_1", name: "Dhaka (Zero Point)", lat: 23.7289, lng: 90.4105, type: "start", completed: false },
-        { id: "wp_2", name: "Cumilla (Highway Inn)", lat: 23.4607, lng: 91.1809, type: "regroup", completed: false },
-        { id: "wp_3", name: "Chattogram (City Gate)", lat: 22.3850, lng: 91.7760, type: "refuel", completed: false },
-        { id: "wp_4", name: "Bandarban (Hill View)", lat: 22.1953, lng: 92.2184, type: "dest", completed: false }
-      ];
     }
   }
 
@@ -5568,7 +5576,12 @@ async function activateAndBroadcastTourPlan() {
 
   // 1. Set Local Active State & Cache
   activeTourPlan = tourPlan;
+  window.activeTourPlan = tourPlan;
+  lastClearedTourTimestamp = 0;
+  window.lastClearedTourTimestamp = 0;
+  clearedTourIds.clear();
   try {
+    sessionStorage.removeItem("cg_last_cleared_tour_time");
     sessionStorage.setItem("cg_active_tour_plan", JSON.stringify(tourPlan));
   } catch (e) {}
 
@@ -5601,10 +5614,116 @@ async function activateAndBroadcastTourPlan() {
   window.closeTourPlanner();
 }
 
+// Clear Active Tour locally (wipes map, HUD, and cached state)
+function clearActiveTourLocally(isRemote = false) {
+  if (activeTourPlan && activeTourPlan.id) {
+    clearedTourIds.add(activeTourPlan.id);
+  }
+  const now = Date.now();
+  lastClearedTourTimestamp = now;
+  window.lastClearedTourTimestamp = now;
+  try {
+    sessionStorage.setItem("cg_last_cleared_tour_time", String(now));
+    sessionStorage.removeItem("cg_active_tour_plan");
+  } catch (e) {}
+
+  activeTourPlan = null;
+  window.activeTourPlan = null;
+
+  // 1. Clear Map Layers (Route polylines and markers)
+  if (tourRouteLayerGroup) {
+    tourRouteLayerGroup.clearLayers();
+  }
+  tourWaypointMarkers = [];
+  tourRoutePolyline = null;
+  tourRouteGlowPolyline = null;
+
+  // 2. Empty Tour Builder list and update modal UI
+  tourBuilderWaypoints = [];
+  renderWaypointBuilderList();
+
+  // 3. Hide all Tour HUD strips, alert cards, and indicators
+  const progressStrip = document.getElementById("tourProgressStrip");
+  const proximityCard = document.getElementById("tourProximityAlertCard");
+  const tourIndicatorDot = document.getElementById("activeTourIndicatorDot");
+  if (progressStrip) progressStrip.classList.add("hidden");
+  if (proximityCard) proximityCard.classList.add("hidden");
+  if (tourIndicatorDot) tourIndicatorDot.classList.add("hidden");
+  hideMiniTourProximityAlert();
+  activeProximityStopId = null;
+
+  if (isRemote) {
+    showRadarToast("🗑️ TOUR ENDED", "Tour plan was cleared by a team member.");
+    playSound("click");
+  }
+}
+
+// Global Clear All Waypoints & End Tour Action
+window.clearAndEndTour = async function() {
+  const currentTour = activeTourPlan;
+  const tourId = currentTour ? currentTour.id : null;
+
+  // 1. Immediately wipe local state, map, and HUD
+  clearActiveTourLocally(false);
+
+  // 2. Dual-Engine Engine A: Supabase Realtime broadcast to other riders in the room
+  const cleanRoom = (currentSession.roomCode || "DHAKA101").trim().toUpperCase();
+  const mySubgroup = (currentSession && currentSession.subgroup) || "All Riders";
+
+  if (realtimeChannel) {
+    try {
+      realtimeChannel.send({
+        type: "broadcast",
+        event: "tour_plan_update",
+        payload: {
+          action: "clear",
+          id: tourId,
+          room_code: cleanRoom,
+          subgroup: mySubgroup,
+          status: "ended",
+          tourPlan: null,
+          cleared_at: new Date().toISOString()
+        }
+      });
+    } catch (bcErr) {
+      console.debug("[tour clear broadcast note]", bcErr);
+    }
+  }
+
+  // 3. Dual-Engine Engine B: Supabase REST delete so room query does not resurrect it
+  try {
+    const encodedRoom = encodeURIComponent(cleanRoom);
+    await supabaseRest(`tour_plans?room_code=eq.${encodedRoom}`, "DELETE");
+  } catch (restErr) {
+    console.debug("[tour_plans REST delete notice]", restErr.message || restErr);
+  }
+
+  showRadarToast("🗑️ TOUR CLEARED", "Tour plan ended and wiped for all riders.");
+  playSound("click");
+};
+
 // Incoming Tour Plan Handler
 function handleIncomingTourPlan(remotePlan, fromRest = false) {
-  if (!remotePlan || !remotePlan.waypoints || !Array.isArray(remotePlan.waypoints)) return;
+  if (!remotePlan) return;
+
+  // Check for clear / end tour payload
+  if (remotePlan.action === "clear" || remotePlan.status === "ended" || remotePlan.tourPlan === null) {
+    if (activeTourPlan) {
+      clearActiveTourLocally(true);
+    }
+    return;
+  }
+
+  if (!remotePlan.waypoints || !Array.isArray(remotePlan.waypoints)) return;
   if (remotePlan.status && remotePlan.status !== "active") return;
+
+  // Check if tour was already explicitly cleared locally
+  if (remotePlan.id && clearedTourIds.has(remotePlan.id)) return;
+
+  const remoteTime = new Date(remotePlan.updated_at || remotePlan.created_at || 0).getTime();
+  if (lastClearedTourTimestamp && remoteTime <= lastClearedTourTimestamp) {
+    return; // Ignore plan that was created or updated before local clear action
+  }
 
   // Subgroup Filtering:
   const mySubgroup = (currentSession && currentSession.subgroup) || "All Riders";
@@ -5618,11 +5737,11 @@ function handleIncomingTourPlan(remotePlan, fromRest = false) {
   // Check if newer than local active plan
   if (activeTourPlan && activeTourPlan.id === remotePlan.id) {
     const localTime = new Date(activeTourPlan.updated_at || 0).getTime();
-    const remoteTime = new Date(remotePlan.updated_at || 0).getTime();
     if (remoteTime <= localTime) return; // Already up to date
   }
 
   activeTourPlan = remotePlan;
+  window.activeTourPlan = remotePlan;
   try {
     sessionStorage.setItem("cg_active_tour_plan", JSON.stringify(remotePlan));
   } catch (e) {}
@@ -5647,6 +5766,9 @@ async function fetchActiveTourPlanFromRest() {
     );
     if (Array.isArray(plans) && plans.length > 0) {
       handleIncomingTourPlan(plans[0], true);
+    } else if (Array.isArray(plans) && plans.length === 0 && activeTourPlan) {
+      // If table query returns empty array but we have an active tour locally that was cleared remotely
+      clearActiveTourLocally(true);
     }
   } catch (err) {
     // Graceful catch: table may not exist yet in Supabase
@@ -6029,9 +6151,15 @@ function initTourPlanner() {
   const clearBtn = document.getElementById("clearTourPlanBtn");
   if (clearBtn) {
     clearBtn.addEventListener("click", () => {
-      tourBuilderWaypoints = [];
-      renderWaypointBuilderList();
-      playSound("click");
+      window.clearAndEndTour();
+    });
+  }
+
+  // 7b. End Tour from Top Strip Button
+  const endTourFromStripBtn = document.getElementById("endTourFromStripBtn");
+  if (endTourFromStripBtn) {
+    endTourFromStripBtn.addEventListener("click", () => {
+      window.clearAndEndTour();
     });
   }
 
@@ -6100,11 +6228,17 @@ function initTourPlanner() {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && Array.isArray(parsed.waypoints) && parsed.waypoints.length > 0) {
-        activeTourPlan = parsed;
-        setTimeout(() => {
-          renderTourOnMap(activeTourPlan, false);
-          evaluateTourProgress();
-        }, 500);
+        const tourTime = new Date(parsed.updated_at || parsed.created_at || 0).getTime();
+        if (!lastClearedTourTimestamp || tourTime > lastClearedTourTimestamp) {
+          activeTourPlan = parsed;
+          window.activeTourPlan = parsed;
+          setTimeout(() => {
+            renderTourOnMap(activeTourPlan, false);
+            evaluateTourProgress();
+          }, 500);
+        } else {
+          sessionStorage.removeItem("cg_active_tour_plan");
+        }
       }
     }
   } catch (e) {}

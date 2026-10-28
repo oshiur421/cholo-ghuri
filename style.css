@@ -1839,6 +1839,24 @@ body {
   transform: scale(0.95);
 }
 
+/* Red Neon Clear / End Tour Buttons */
+#clearTourPlanBtn {
+  background: rgba(127, 29, 29, 0.5) !important;
+  border: 1.5px solid rgba(239, 68, 68, 0.8) !important;
+  color: #fca5a5 !important;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.3) !important;
+  transition: all 0.2s ease !important;
+}
+#clearTourPlanBtn:hover {
+  background: rgba(220, 38, 38, 0.75) !important;
+  border-color: #ef4444 !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 22px rgba(239, 68, 68, 0.6) !important;
+}
+#clearTourPlanBtn:active {
+  transform: scale(0.95);
+}
+
 /* 2. Preset Chips */
 .preset-chip {
   padding: 4px 10px;
