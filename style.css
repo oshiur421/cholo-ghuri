@@ -378,29 +378,40 @@ body {
   text-decoration: none;
 }
 
-/* Biker Marker on Leaflet */
+/* Biker Marker on Leaflet (Compact 28px x 28px, Exact GPS Anchor) */
+.custom-biker-icon {
+  background: transparent !important;
+  border: none !important;
+  width: 28px !important;
+  height: 28px !important;
+  overflow: visible !important;
+}
+
 .biker-marker-container {
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
   cursor: pointer;
+  box-sizing: border-box;
 }
 
 .biker-marker-pulse {
   position: absolute;
-  width: 52px;
-  height: 52px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: rgba(0, 255, 136, 0.2);
-  border: 1px solid rgba(0, 255, 136, 0.4);
+  background: rgba(0, 255, 136, 0.22);
+  border: 1px solid rgba(0, 255, 136, 0.45);
   animation: pulseRadarRing 2.2s infinite ease-out;
   pointer-events: none;
 }
 
 .biker-marker-body {
-  width: 38px;
-  height: 38px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: #09121a;
   border: 2px solid var(--neon-green);
@@ -408,54 +419,61 @@ body {
   align-items: center;
   justify-content: center;
   color: var(--neon-green);
-  box-shadow: 0 0 15px var(--neon-green-glow), 0 4px 8px rgba(0,0,0,0.8);
-  transition: transform 0.3s ease;
+  font-size: 10px;
+  box-shadow: 0 0 10px var(--neon-green-glow), 0 2px 5px rgba(0,0,0,0.85);
+  transition: transform 0.25s ease;
   z-index: 2;
+  position: relative;
 }
 
 .biker-marker-leader .biker-marker-body {
   border-color: #fbbf24;
   color: #fbbf24;
-  box-shadow: 0 0 18px rgba(251, 191, 36, 0.6), 0 4px 8px rgba(0,0,0,0.8);
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.75), 0 2px 5px rgba(0,0,0,0.85);
 }
 
 .biker-marker-leader .biker-marker-pulse {
   background: rgba(251, 191, 36, 0.25);
-  border-color: rgba(251, 191, 36, 0.4);
+  border-color: rgba(251, 191, 36, 0.45);
 }
 
 .biker-heading-arrow {
   position: absolute;
-  top: -8px;
+  top: -5px;
   width: 0;
   height: 0;
-  border-left: 6px solid transparent;
-  border-right: 6px solid transparent;
-  border-bottom: 9px solid var(--neon-green);
-  filter: drop-shadow(0 0 4px var(--neon-green));
+  border-left: 3.5px solid transparent;
+  border-right: 3.5px solid transparent;
+  border-bottom: 6px solid var(--neon-green);
+  filter: drop-shadow(0 0 3px var(--neon-green));
 }
 
 .biker-marker-leader .biker-heading-arrow {
   border-bottom-color: #fbbf24;
-  filter: drop-shadow(0 0 4px #fbbf24);
+  filter: drop-shadow(0 0 3px #fbbf24);
 }
 
 .biker-tag {
   position: absolute;
-  bottom: -22px;
+  top: calc(100% + 2px);
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(9, 14, 23, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  padding: 1px 7px;
-  border-radius: 6px;
+  background: rgba(9, 14, 23, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 0.5px 5px;
+  border-radius: 4px;
   font-family: 'Rajdhani', sans-serif;
   font-weight: 700;
-  font-size: 11px;
+  font-size: 9.5px;
+  line-height: 1.2;
   white-space: nowrap;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: #f8fafc;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.8);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.85);
   pointer-events: none;
+  z-index: 5;
 }
 
 /* Police Radar Checkpost Marker */
@@ -1949,197 +1967,212 @@ body {
   color: #38bdf8;
 }
 
-/* 5. Custom Leaflet DivIcon Markers */
+/* 5. Custom Leaflet DivIcon Markers (Compact 26px x 26px, Exact GPS Point Anchor [13, 13]) */
 .custom-tour-waypoint-icon {
   background: transparent !important;
   border: none !important;
+  width: 26px !important;
+  height: 26px !important;
+  overflow: visible !important;
 }
 
-.tour-waypoint-marker-wrap {
-  position: relative;
+.tour-target-badge {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  transform: translate(-50%, -100%);
+  justify-content: center;
+  position: relative;
+  box-sizing: border-box;
   cursor: pointer;
   user-select: none;
+  font-family: 'Orbitron', monospace;
+  font-weight: 900;
+  font-size: 11px;
+  line-height: 1;
+  transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.15s ease;
   pointer-events: auto !important;
 }
-
-.tour-waypoint-badge {
-  position: relative;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.7);
-  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-.tour-waypoint-marker-wrap:hover .tour-waypoint-badge {
-  transform: scale(1.15);
+.tour-target-badge:hover {
+  transform: scale(1.22);
+  z-index: 1000;
 }
 
-.tour-waypoint-num {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  width: 17px;
-  height: 17px;
-  border-radius: 50%;
-  background: #020617;
-  border: 1.5px solid currentColor;
-  color: inherit;
+.tour-target-letter {
   font-family: 'Orbitron', monospace;
-  font-size: 9px;
   font-weight: 900;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
-}
-
-.tour-waypoint-pin {
-  width: 0;
-  height: 0;
-  border-left: 6px solid transparent;
-  border-right: 6px solid transparent;
-  border-top: 8px solid currentColor;
-  margin-top: -1px;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
-}
-
-.tour-waypoint-label {
-  margin-top: 3px;
-  padding: 2px 7px;
-  border-radius: 6px;
-  background: rgba(2, 6, 23, 0.92);
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
-  white-space: nowrap;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-family: 'Chakra Petch', sans-serif;
-  font-size: 9.5px;
-  font-weight: 700;
+  font-size: 11.5px;
+  line-height: 1;
+  text-align: center;
   pointer-events: none;
 }
-.tour-waypoint-type {
-  font-weight: 800;
-  letter-spacing: 0.5px;
-}
-.tour-waypoint-name {
-  color: #f1f5f9;
-  max-width: 110px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+
+.tour-target-pip {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 6px;
+  background: #020617;
+  border: 1px solid currentColor;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+  pointer-events: none;
 }
 
-/* Specific Marker Type Themes */
+/* Specific Waypoint Badge Themes */
 /* 🟢 START (Emerald) */
-.tour-marker-start .tour-waypoint-badge {
-  background: linear-gradient(135deg, #059669, #10b981);
-  border: 2px solid #34d399;
-  color: #34d399;
-  box-shadow: 0 0 16px rgba(16, 185, 129, 0.7);
+.tour-target-start,
+.tour-marker-start {
+  background: radial-gradient(circle at 35% 35%, #059669, #022c1b);
+  border: 2px solid #00ff88;
+  color: #00ff88;
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.75), 0 2px 6px rgba(0, 0, 0, 0.85);
 }
-.tour-marker-start .tour-waypoint-pin {
-  color: #10b981;
+.tour-target-start .tour-target-letter {
+  color: #ffffff;
+  text-shadow: 0 0 4px #00ff88;
 }
-.tour-marker-start .tour-waypoint-label {
-  border-color: rgba(16, 185, 129, 0.6);
-}
-.tour-marker-start .tour-waypoint-type {
-  color: #34d399;
+.tour-target-start .tour-target-pip {
+  border-color: #00ff88;
+  color: #00ff88;
 }
 
 /* 🤝 REGROUP (Cyan / Amber Pulsing) */
-.tour-marker-regroup .tour-waypoint-badge {
-  background: linear-gradient(135deg, #0284c7, #f59e0b);
-  border: 2px solid #fef08a;
+.tour-target-regroup,
+.tour-marker-regroup {
+  background: radial-gradient(circle at 35% 35%, #d97706, #1c1002);
+  border: 2px solid #f59e0b;
   color: #f59e0b;
-  box-shadow: 0 0 20px rgba(245, 158, 11, 0.75), 0 0 35px rgba(2, 132, 199, 0.4);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.85), 0 2px 6px rgba(0, 0, 0, 0.85);
   animation: tourBadgePulseAmber 1.6s ease-in-out infinite;
 }
-.tour-marker-regroup .tour-waypoint-pin {
-  color: #f59e0b;
+.tour-target-regroup .tour-target-letter {
+  color: #ffffff;
+  text-shadow: 0 0 4px #f59e0b;
 }
-.tour-marker-regroup .tour-waypoint-label {
-  border-color: rgba(245, 158, 11, 0.7);
-}
-.tour-marker-regroup .tour-waypoint-type {
+.tour-target-regroup .tour-target-pip {
+  border-color: #f59e0b;
   color: #fbbf24;
 }
 
 /* ⛽ REFUEL (Orange / Red) */
-.tour-marker-refuel .tour-waypoint-badge {
-  background: linear-gradient(135deg, #ea580c, #dc2626);
-  border: 2px solid #fed7aa;
+.tour-target-refuel,
+.tour-marker-refuel {
+  background: radial-gradient(circle at 35% 35%, #ea580c, #1f0802);
+  border: 2px solid #f97316;
   color: #f97316;
-  box-shadow: 0 0 18px rgba(249, 115, 22, 0.7);
+  box-shadow: 0 0 12px rgba(249, 115, 22, 0.85), 0 2px 6px rgba(0, 0, 0, 0.85);
   animation: tourBadgePulseOrange 1.8s ease-in-out infinite;
 }
-.tour-marker-refuel .tour-waypoint-pin {
-  color: #ea580c;
+.tour-target-refuel .tour-target-letter {
+  color: #ffffff;
+  text-shadow: 0 0 4px #f97316;
 }
-.tour-marker-refuel .tour-waypoint-label {
-  border-color: rgba(249, 115, 22, 0.7);
-}
-.tour-marker-refuel .tour-waypoint-type {
-  color: #fb923c;
+.tour-target-refuel .tour-target-pip {
+  border-color: #f97316;
+  color: #fdba74;
 }
 
 /* ☕ REST (Teal / Amber) */
-.tour-marker-rest .tour-waypoint-badge {
-  background: linear-gradient(135deg, #0d9488, #d97706);
-  border: 2px solid #99f6e4;
-  color: #2dd4bf;
-  box-shadow: 0 0 16px rgba(20, 184, 166, 0.6);
+.tour-target-rest,
+.tour-marker-rest {
+  background: radial-gradient(circle at 35% 35%, #0d9488, #031c19);
+  border: 2px solid #14b8a6;
+  color: #14b8a6;
+  box-shadow: 0 0 10px rgba(20, 184, 166, 0.75), 0 2px 6px rgba(0, 0, 0, 0.85);
 }
-.tour-marker-rest .tour-waypoint-pin {
-  color: #0d9488;
+.tour-target-rest .tour-target-letter {
+  color: #ffffff;
+  text-shadow: 0 0 4px #14b8a6;
 }
-.tour-marker-rest .tour-waypoint-label {
-  border-color: rgba(20, 184, 166, 0.6);
-}
-.tour-marker-rest .tour-waypoint-type {
-  color: #2dd4bf;
+.tour-target-rest .tour-target-pip {
+  border-color: #14b8a6;
+  color: #5eead4;
 }
 
 /* 🏁 END / DESTINATION (Checkered Neon Cyan) */
-.tour-marker-dest .tour-waypoint-badge {
-  background: linear-gradient(135deg, #0284c7, #06b6d4);
-  border: 2px solid #67e8f9;
-  color: #22d3ee;
-  box-shadow: 0 0 20px rgba(6, 182, 212, 0.8);
+.tour-target-dest,
+.tour-marker-dest {
+  background: radial-gradient(circle at 35% 35%, #0284c7, #021824);
+  border: 2px solid #00f0ff;
+  color: #00f0ff;
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.85), 0 2px 6px rgba(0, 0, 0, 0.85);
   animation: tourBadgePulseCyan 2s ease-in-out infinite;
 }
-.tour-marker-dest .tour-waypoint-pin {
-  color: #06b6d4;
+.tour-target-dest .tour-target-letter {
+  color: #ffffff;
+  text-shadow: 0 0 4px #00f0ff;
 }
-.tour-marker-dest .tour-waypoint-label {
-  border-color: rgba(6, 182, 212, 0.7);
+.tour-target-dest .tour-target-pip {
+  border-color: #00f0ff;
+  color: #67e8f9;
 }
-.tour-marker-dest .tour-waypoint-type {
-  color: #22d3ee;
+
+/* Leaflet Hover Tooltip for Tour Waypoints */
+.custom-tour-leaflet-tooltip {
+  background: rgba(2, 6, 23, 0.94) !important;
+  border: 1px solid rgba(0, 240, 255, 0.4) !important;
+  border-radius: 8px !important;
+  color: #f1f5f9 !important;
+  padding: 4px 8px !important;
+  font-family: 'Rajdhani', sans-serif !important;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.8), 0 0 10px rgba(0, 240, 255, 0.2) !important;
+  backdrop-filter: blur(8px) !important;
+}
+.custom-tour-leaflet-tooltip::before {
+  border-top-color: rgba(0, 240, 255, 0.4) !important;
+}
+.tour-waypoint-tooltip-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tour-tooltip-title-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.tour-tooltip-badge {
+  font-family: 'Orbitron', monospace;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+.tour-tooltip-type {
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+.tour-tooltip-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: #f8fafc;
+}
+.tour-tooltip-dist {
+  font-size: 10px;
+  font-weight: 600;
+  color: #34d399;
 }
 
 /* Marker Keyframe Glow Pulses */
 @keyframes tourBadgePulseAmber {
-  0%, 100% { box-shadow: 0 0 16px rgba(245, 158, 11, 0.7), 0 0 28px rgba(2, 132, 199, 0.3); }
-  50% { box-shadow: 0 0 26px rgba(245, 158, 11, 0.95), 0 0 45px rgba(2, 132, 199, 0.6); }
+  0%, 100% { box-shadow: 0 0 10px rgba(245, 158, 11, 0.7), 0 0 20px rgba(2, 132, 199, 0.3); }
+  50% { box-shadow: 0 0 18px rgba(245, 158, 11, 0.95), 0 0 30px rgba(2, 132, 199, 0.5); }
 }
 @keyframes tourBadgePulseOrange {
-  0%, 100% { box-shadow: 0 0 16px rgba(249, 115, 22, 0.65); }
-  50% { box-shadow: 0 0 26px rgba(249, 115, 22, 0.95), 0 0 40px rgba(239, 68, 68, 0.45); }
+  0%, 100% { box-shadow: 0 0 10px rgba(249, 115, 22, 0.65); }
+  50% { box-shadow: 0 0 18px rgba(249, 115, 22, 0.95), 0 0 26px rgba(239, 68, 68, 0.45); }
 }
 @keyframes tourBadgePulseCyan {
-  0%, 100% { box-shadow: 0 0 16px rgba(6, 182, 212, 0.65); }
-  50% { box-shadow: 0 0 28px rgba(6, 182, 212, 0.95), 0 0 45px rgba(0, 240, 255, 0.5); }
+  0%, 100% { box-shadow: 0 0 10px rgba(6, 182, 212, 0.65); }
+  50% { box-shadow: 0 0 18px rgba(6, 182, 212, 0.95), 0 0 30px rgba(0, 240, 255, 0.5); }
 }
 
 /* 6. Mini Alert Dock Tour Icons */

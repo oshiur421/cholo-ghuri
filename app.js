@@ -3232,7 +3232,7 @@ try {
 
 function createBikerMarkerIcon(riderName, isLeader, speed, heading = 0) {
   const leaderClass = isLeader ? "biker-marker-leader" : "";
-  const iconHtml = isLeader ? '<i class="fa-solid fa-crown text-xs"></i>' : '<i class="fa-solid fa-motorcycle text-xs"></i>';
+  const iconHtml = isLeader ? '<i class="fa-solid fa-crown text-[10px]"></i>' : '<i class="fa-solid fa-motorcycle text-[10px]"></i>';
   const roundedSpeed = Math.round(speed || 0);
 
   return L.divIcon({
@@ -3245,12 +3245,12 @@ function createBikerMarkerIcon(riderName, isLeader, speed, heading = 0) {
           ${iconHtml}
         </div>
         <div class="biker-tag">
-          ${isLeader ? "👑 " : ""}${escapeHtml(riderName)} • ${roundedSpeed} km/h
+          ${isLeader ? "👑 " : ""}${escapeHtml(riderName)} • ${roundedSpeed}k
         </div>
       </div>
     `,
-    iconSize: [52, 52],
-    iconAnchor: [26, 26]
+    iconSize: [28, 28],
+    iconAnchor: [14, 14]
   });
 }
 
@@ -4885,35 +4885,35 @@ function getStopTypeLabel(type) {
 }
 
 function createWaypointDivIcon(type, name, index, total) {
-  let badgeThemeClass = "tour-marker-dest";
-  let iconHtml = "🏁";
+  let badgeThemeClass = "tour-target-dest";
+  let typePip = "🏁";
   let typeLabel = "🏁 DEST";
 
   switch (type) {
     case "start":
-      badgeThemeClass = "tour-marker-start";
-      iconHtml = '<i class="fa-solid fa-play text-emerald-300 text-xs"></i>';
+      badgeThemeClass = "tour-target-start";
+      typePip = '<i class="fa-solid fa-play text-[6px]"></i>';
       typeLabel = "🟢 START";
       break;
     case "regroup":
-      badgeThemeClass = "tour-marker-regroup";
-      iconHtml = "🤝";
+      badgeThemeClass = "tour-target-regroup";
+      typePip = "🤝";
       typeLabel = "🤝 REGROUP";
       break;
     case "refuel":
-      badgeThemeClass = "tour-marker-refuel";
-      iconHtml = "⛽";
+      badgeThemeClass = "tour-target-refuel";
+      typePip = "⛽";
       typeLabel = "⛽ REFUEL";
       break;
     case "rest":
-      badgeThemeClass = "tour-marker-rest";
-      iconHtml = "☕";
+      badgeThemeClass = "tour-target-rest";
+      typePip = "☕";
       typeLabel = "☕ REST";
       break;
     case "dest":
     default:
-      badgeThemeClass = "tour-marker-dest";
-      iconHtml = "🏁";
+      badgeThemeClass = "tour-target-dest";
+      typePip = "🏁";
       typeLabel = "🏁 END";
       break;
   }
@@ -4924,21 +4924,14 @@ function createWaypointDivIcon(type, name, index, total) {
   return L.divIcon({
     className: "custom-tour-waypoint-icon",
     html: `
-      <div class="tour-waypoint-marker-wrap ${badgeThemeClass}" data-waypoint-index="${index}">
-        <div class="tour-waypoint-badge">
-          <span class="tour-waypoint-icon">${iconHtml}</span>
-          <span class="tour-waypoint-num">${letter}</span>
-        </div>
-        <div class="tour-waypoint-pin"></div>
-        <div class="tour-waypoint-label">
-          <span class="tour-waypoint-type">${typeLabel}</span>
-          <span class="tour-waypoint-name">${escapeHtml(displayName)}</span>
-        </div>
+      <div class="tour-target-badge ${badgeThemeClass}" data-waypoint-index="${index}" title="Point ${letter}: ${escapeHtml(displayName)} (${typeLabel})">
+        <span class="tour-target-letter">${letter}</span>
+        <span class="tour-target-pip">${typePip}</span>
       </div>
     `,
-    iconSize: [40, 48],
-    iconAnchor: [20, 48],
-    popupAnchor: [0, -48]
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+    popupAnchor: [0, -14]
   });
 }
 
@@ -5010,6 +5003,22 @@ async function renderTourOnMap(tourPlan, fitBounds = false) {
 
     const distFromUser = calculateDistanceKm(riderLocation.lat, riderLocation.lng, wp.lat, wp.lng);
     const distText = distFromUser < 1 ? `${Math.round(distFromUser * 1000)}m` : `${distFromUser.toFixed(1)} km`;
+
+    // Clean hover tooltip (never interferes with marker GPS center anchor)
+    marker.bindTooltip(`
+      <div class="tour-waypoint-tooltip-content">
+        <div class="tour-tooltip-title-row">
+          <span class="tour-tooltip-badge tour-target-${wp.type || 'dest'}">Point ${String.fromCharCode(65 + idx)}</span>
+          <span class="tour-tooltip-type">${getStopTypeIcon(wp.type)} ${getStopTypeLabel(wp.type)}</span>
+        </div>
+        <div class="tour-tooltip-name">${escapeHtml(wp.name)}</div>
+        <div class="tour-tooltip-dist">📍 ${distText} from bike</div>
+      </div>
+    `, {
+      direction: "top",
+      offset: [0, -14],
+      className: "custom-tour-leaflet-tooltip"
+    });
 
     marker.bindPopup(`
       <div style="font-family: 'Rajdhani', sans-serif; min-width: 170px; padding: 2px;">
