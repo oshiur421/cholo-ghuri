@@ -1328,11 +1328,11 @@ function evaluatePoliceProximity() {
 
   if (closest && minDistanceKm <= APPROACHING_POLICE_DISTANCE_KM) {
     closestApproachingPolice = closest;
-    const distFormatted = minDistanceKm < 1 ? `${Math.round(minDistanceKm * 1000)}m` : `${minDistanceKm.toFixed(1)}km`;
-
     if (bannerText) {
-      bannerText.textContent = `🛡️ Police • ${distFormatted}`;
+      bannerText.textContent = formatRadarAlertText(closest, minDistanceKm);
     }
+
+    const distFormatted = minDistanceKm < 1 ? `${Math.round(minDistanceKm * 1000)}m` : `${minDistanceKm.toFixed(1)} km`;
 
     const now = Date.now();
     if (now - lastPoliceVoiceAnnounceTime > 25000) {
@@ -1346,7 +1346,7 @@ function evaluatePoliceProximity() {
       }
     }
 
-    // Default: Show Minimized Round Icon in #miniAlertDock (do NOT open big banner automatically!)
+    // Default: Show Minimized Round Icon in #miniAlertDock (do NOT open card automatically!)
     const radarAlertId = `radar_banner_${closest.id}`;
     if (!window.isAlertDismissed(radarAlertId) && !window.isAlertDismissed(closest.id)) {
       showMiniRadarAlert(closest, minDistanceKm);
@@ -1354,8 +1354,6 @@ function evaluatePoliceProximity() {
   } else {
     closestApproachingPolice = null;
     if (banner) banner.classList.add("hidden");
-    const roadBanner = document.getElementById("currentRoadBanner");
-    if (roadBanner) roadBanner.classList.remove("has-radar-alert");
     hideMiniRadarAlert(closest ? closest.id : null);
     hideMiniPoliceAlert(closest ? closest.id : null);
   }
@@ -1521,55 +1519,88 @@ function showMiniRoadAlert(roadName, limit, roadType, alertId) {
   const dock = document.getElementById("miniAlertDock");
   if (!dock) return;
 
-  const itemId = `miniAlertItem_road_${alertId}`;
-  let item = document.getElementById(itemId);
+  // IMPORTANT: Remove any pre-existing road/speed icons to guarantee ONLY 1 active speed limit icon exists!
+  const oldRoadItems = dock.querySelectorAll("[id^='miniAlertItem_road_'], .speed-alert-item");
+  oldRoadItems.forEach(el => {
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+  });
 
-  if (!item) {
-    item = document.createElement("div");
-    item.id = itemId;
-    item.className = "mini-alert-item mini-alert-popin";
-    item.innerHTML = `
-      <button 
-        type="button" 
-        class="mini-alert-btn speed-alert" 
-        onclick="window.expandMiniRoadAlert('${alertId}')"
-        title="Speed Limit ${limit} KM/H - ${escapeHtml(roadName)} (Tap for Details)"
-      >
-        <div class="flex flex-col items-center justify-center -space-y-0.5 select-none pointer-events-none">
-          <span class="text-base font-black font-hud text-slate-900 leading-none">${limit}</span>
-          <span class="text-[7.5px] font-bold text-red-600 tracking-tighter leading-none">LIMIT</span>
-        </div>
-        <span class="mini-alert-badge badge-speed">${limit} KM/H</span>
-      </button>
-      <button 
-        type="button" 
-        class="mini-alert-close" 
-        onclick="window.dismissMiniAlert('road', '${alertId}', event)" 
-        title="Permanently Dismiss (Cross)"
-      >&times;</button>
-    `;
-    dock.appendChild(item);
-  }
+  const itemId = `miniAlertItem_road_${alertId}`;
+  const item = document.createElement("div");
+  item.id = itemId;
+  item.className = "mini-alert-item speed-alert-item mini-alert-popin";
+  item.innerHTML = `
+    <button 
+      type="button" 
+      class="mini-alert-btn speed-alert" 
+      onclick="window.expandMiniRoadAlert('${alertId}')"
+      title="Speed Limit ${limit} KM/H - ${escapeHtml(roadName)} (Tap to Open Alert Card)"
+    >
+      <div class="flex flex-col items-center justify-center -space-y-0.5 select-none pointer-events-none">
+        <span class="text-base font-black font-hud text-slate-900 leading-none">${limit}</span>
+        <span class="text-[7.5px] font-bold text-red-600 tracking-tighter leading-none">LIMIT</span>
+      </div>
+      <span class="mini-alert-badge badge-speed">${limit} KM/H</span>
+    </button>
+    <button 
+      type="button" 
+      class="mini-alert-close" 
+      onclick="window.dismissMiniAlert('road', '${alertId}', event)" 
+      title="Permanently Dismiss (Cross)"
+    >&times;</button>
+  `;
+  dock.appendChild(item);
 }
 window.showMiniRoadAlert = showMiniRoadAlert;
 
 function hideMiniRoadAlert(alertId) {
-  if (!alertId && currentRoadTransitionDetails) alertId = currentRoadTransitionDetails.alertId;
-  if (!alertId) return;
-  const itemId = `miniAlertItem_road_${alertId}`;
-  const item = document.getElementById(itemId);
-  if (item) {
+  const dock = document.getElementById("miniAlertDock");
+  if (!dock) return;
+  const items = dock.querySelectorAll("[id^='miniAlertItem_road_'], .speed-alert-item");
+  items.forEach(item => {
     item.classList.add("mini-alert-popout");
     setTimeout(() => {
       if (item && item.parentNode) item.parentNode.removeChild(item);
     }, 200);
-  }
+  });
 }
 window.hideMiniRoadAlert = hideMiniRoadAlert;
 
 window.expandMiniRoadAlert = function(alertId) {
-  openRoadTransitionModal();
+  expandRoadAlertCard();
 };
+
+function expandRoadAlertCard() {
+  const card = document.getElementById("roadTransitionPopup");
+  const textEl = document.getElementById("roadTransitionAlertText");
+  if (currentRoadTransitionDetails) {
+    const { roadName, limit } = currentRoadTransitionDetails;
+    if (textEl) {
+      textEl.textContent = formatRoadAlertText(roadName, limit);
+    }
+  }
+  if (card) {
+    card.classList.remove("hidden");
+  }
+}
+window.expandRoadAlertCard = expandRoadAlertCard;
+
+function minimizeRoadAlertCard() {
+  const card = document.getElementById("roadTransitionPopup");
+  if (card) card.classList.add("hidden");
+  // Round icon remains docked in #miniAlertDock!
+}
+window.minimizeRoadAlertCard = minimizeRoadAlertCard;
+
+function dismissRoadAlertCard() {
+  if (currentRoadTransitionDetails && currentRoadTransitionDetails.alertId) {
+    markAlertAsDismissed(currentRoadTransitionDetails.alertId);
+    hideMiniRoadAlert(currentRoadTransitionDetails.alertId);
+  }
+  const card = document.getElementById("roadTransitionPopup");
+  if (card) card.classList.add("hidden");
+}
+window.dismissRoadAlertCard = dismissRoadAlertCard;
 
 // ==========================================
 // RADAR ALERT (HIGHWAY POLICE RADAR) HANDLERS
@@ -1637,14 +1668,14 @@ function hideMiniRadarAlert(reportId) {
 window.hideMiniRadarAlert = hideMiniRadarAlert;
 
 // ==========================================
-// 3-COLUMN SPLIT HUD BAR ALERT FORMATTERS
+// SUB-ROAD ALERT SECTION FORMATTERS
 // ==========================================
 function formatConvoyAlertText(rider) {
-  if (!rider) return "⚠️ Rider Alert";
+  if (!rider) return "⚠️ Convoy Gap Alert";
   const name = rider.rider_name || "Rider";
   const gapKm = rider.distanceToLeader !== undefined ? rider.distanceToLeader : 1.5;
-  const gapStr = gapKm < 1 ? `${Math.round(gapKm * 1000)}m` : `${gapKm.toFixed(1)}km`;
-  return `⚠️ ${name} • ${gapStr}`;
+  const gapFormatted = gapKm < 1 ? `${Math.round(gapKm * 1000)}m` : `${gapKm.toFixed(1)} km`;
+  return `⚠️ ${name} • ${gapFormatted} dure ache!`;
 }
 
 function formatRadarAlertText(report, distKm) {
@@ -1655,8 +1686,13 @@ function formatRadarAlertText(report, distKm) {
       distKm = 0.5;
     }
   }
-  const distStr = distKm < 1 ? `${Math.round(distKm * 1000)}m` : `${distKm.toFixed(1)}km`;
-  return `🛡️ Police • ${distStr}`;
+  const distFormatted = distKm < 1 ? `${Math.round(distKm * 1000)}m` : `${distKm.toFixed(1)} km`;
+  const reporter = (report && report.reported_by) ? report.reported_by : "Biker";
+  return `🛡️ Police Checkpost • ${distFormatted} samne (by ${reporter})`;
+}
+
+function formatRoadAlertText(roadName, limit) {
+  return `🛣️ ${roadName || "Road"} • Speed Limit ${limit || 60} KM/H`;
 }
 
 window.expandMiniRadarAlert = function(reportId) {
@@ -1668,21 +1704,16 @@ window.expandMiniRadarAlert = function(reportId) {
     const distKm = report.distanceToBiker || calculateDistanceKm(riderLocation.lat, riderLocation.lng, report.lat, report.lng);
     if (bannerText) {
       bannerText.textContent = formatRadarAlertText(report, distKm);
-      bannerText.title = `Police Checkpost ahead (${distKm < 1 ? Math.round(distKm * 1000) + "m" : distKm.toFixed(1) + "km"} away)`;
     }
   }
   if (banner) {
     banner.classList.remove("hidden");
-    const roadBanner = document.getElementById("currentRoadBanner");
-    if (roadBanner) roadBanner.classList.add("has-radar-alert");
   }
 };
 
 function minimizeApproachingPoliceAlert() {
   const banner = document.getElementById("radarAlertBanner") || document.getElementById("approachingPoliceBanner");
   if (banner) banner.classList.add("hidden");
-  const roadBanner = document.getElementById("currentRoadBanner");
-  if (roadBanner) roadBanner.classList.remove("has-radar-alert");
   // Round icon remains docked in #miniAlertDock!
 }
 window.minimizeApproachingPoliceAlert = minimizeApproachingPoliceAlert;
@@ -1697,8 +1728,6 @@ function dismissApproachingPoliceAlert() {
   }
   const banner = document.getElementById("radarAlertBanner") || document.getElementById("approachingPoliceBanner");
   if (banner) banner.classList.add("hidden");
-  const roadBanner = document.getElementById("currentRoadBanner");
-  if (roadBanner) roadBanner.classList.remove("has-radar-alert");
 }
 window.dismissApproachingPoliceAlert = dismissApproachingPoliceAlert;
 
@@ -1728,7 +1757,7 @@ function showMiniConvoyGapAlert(rider) {
         type="button" 
         class="mini-alert-btn convoy-gap-alert" 
         onclick="window.expandMiniConvoyGapAlert('${rider.id}')"
-        title="Convoy Gap Alert (${escapeHtml(rider.rider_name)} is ${gapLabel} away) - Tap to Open in Bar"
+        title="Convoy Gap Alert (${escapeHtml(rider.rider_name)} is ${gapLabel} away) - Tap to Open Alert Card"
       >
         <i class="fa-solid fa-triangle-exclamation text-xl text-yellow-200"></i>
         <span class="mini-alert-badge badge-gap" id="miniConvoyBadge_${rider.id}">${gapLabel}</span>
@@ -1775,21 +1804,16 @@ window.expandMiniConvoyGapAlert = function(riderId) {
     activeStragglerAlert = rider;
     if (alertText) {
       alertText.textContent = formatConvoyAlertText(rider);
-      alertText.title = `Convoy Distance Alert: ${rider.rider_name} is ${rider.distanceToLeader ? rider.distanceToLeader.toFixed(1) : "1.5"}km away`;
     }
   }
   if (alertBanner) {
     alertBanner.classList.remove("hidden");
-    const roadBanner = document.getElementById("currentRoadBanner");
-    if (roadBanner) roadBanner.classList.add("has-distance-alert");
   }
 };
 
 function minimizeConvoyAlert() {
   const alertBanner = document.getElementById("distanceAlertBanner") || document.getElementById("convoyAlertBanner");
   if (alertBanner) alertBanner.classList.add("hidden");
-  const roadBanner = document.getElementById("currentRoadBanner");
-  if (roadBanner) roadBanner.classList.remove("has-distance-alert");
   // Round icon remains docked in #miniAlertDock!
 }
 window.minimizeConvoyAlert = minimizeConvoyAlert;
@@ -1803,8 +1827,6 @@ function dismissConvoyAlert() {
   }
   const alertBanner = document.getElementById("distanceAlertBanner") || document.getElementById("convoyAlertBanner");
   if (alertBanner) alertBanner.classList.add("hidden");
-  const roadBanner = document.getElementById("currentRoadBanner");
-  if (roadBanner) roadBanner.classList.remove("has-distance-alert");
 }
 window.dismissConvoyAlert = dismissConvoyAlert;
 
@@ -1822,6 +1844,7 @@ window.dismissMiniAlert = function(type, alertId, event) {
     }
   } else if (type === "road") {
     hideMiniRoadAlert(alertId);
+    minimizeRoadAlertCard();
     dismissRoadTransitionPopup();
   } else if (type === "radar_banner") {
     const rawId = alertId.replace("radar_banner_", "");
@@ -1831,8 +1854,6 @@ window.dismissMiniAlert = function(type, alertId, event) {
     hideMiniPoliceAlert(rawId);
     const banner = document.getElementById("radarAlertBanner") || document.getElementById("approachingPoliceBanner");
     if (banner) banner.classList.add("hidden");
-    const roadBanner = document.getElementById("currentRoadBanner");
-    if (roadBanner) roadBanner.classList.remove("has-radar-alert");
   } else if (type === "convoy_gap") {
     const rawId = alertId.replace("convoy_gap_", "");
     markAlertAsDismissed(`convoy_gap_${rawId}`);
@@ -1840,8 +1861,6 @@ window.dismissMiniAlert = function(type, alertId, event) {
     hideMiniConvoyGapAlert(rawId);
     const banner = document.getElementById("distanceAlertBanner") || document.getElementById("convoyAlertBanner");
     if (banner) banner.classList.add("hidden");
-    const roadBanner = document.getElementById("currentRoadBanner");
-    if (roadBanner) roadBanner.classList.remove("has-distance-alert");
   }
 };
 
@@ -1960,7 +1979,6 @@ function evaluateConvoyDistances() {
     activeStragglerAlert = maxStraggler;
     if (alertText) {
       alertText.textContent = formatConvoyAlertText(maxStraggler);
-      alertText.title = `Convoy Distance Alert: ${maxStraggler.rider_name} is ${maxStraggler.distanceToLeader ? maxStraggler.distanceToLeader.toFixed(1) : "1.5"}km away`;
     }
 
     const now = Date.now();
@@ -1975,7 +1993,7 @@ function evaluateConvoyDistances() {
       }
     }
 
-    // Default: Show Minimized Round Icon in #miniAlertDock (do NOT open big banner automatically!)
+    // Default: Show Minimized Round Icon in #miniAlertDock (do NOT open card automatically!)
     const convoyAlertId = `convoy_gap_${maxStraggler.id}`;
     if (!window.isAlertDismissed(convoyAlertId)) {
       showMiniConvoyGapAlert(maxStraggler);
@@ -1983,8 +2001,6 @@ function evaluateConvoyDistances() {
   } else {
     activeStragglerAlert = null;
     if (alertBanner) alertBanner.classList.add("hidden");
-    const roadBanner = document.getElementById("currentRoadBanner");
-    if (roadBanner) roadBanner.classList.remove("has-distance-alert");
     hideMiniConvoyGapAlert();
   }
 
@@ -2605,6 +2621,11 @@ function triggerRoadTransitionPopup(newRoadName, newSpeedLimit, newRoadType = "H
     roadType: newRoadType,
     alertId: roadAlertId
   };
+
+  const roadAlertText = document.getElementById("roadTransitionAlertText");
+  if (roadAlertText) {
+    roadAlertText.textContent = formatRoadAlertText(newRoadName, newSpeedLimit);
+  }
 
   // Show Minimized Floating Round Icon instead of opening the giant modal automatically!
   if (!window.isAlertDismissed(roadAlertId)) {
@@ -4966,6 +4987,32 @@ function initApp() {
     closeVerifyModalBtn.addEventListener("click", () => {
       playSound("click");
       dismissVerifyPoliceModal();
+    });
+  }
+
+  // Road Alert Card Buttons in #subRoadAlertSection
+  const viewRoadDetailsBtn = document.getElementById("viewRoadDetailsBtn");
+  if (viewRoadDetailsBtn) {
+    viewRoadDetailsBtn.addEventListener("click", () => {
+      playSound("click");
+      openRoadTransitionModal();
+      minimizeRoadAlertCard();
+    });
+  }
+
+  const minimizeRoadAlertBtn = document.getElementById("minimizeRoadAlertBtn");
+  if (minimizeRoadAlertBtn) {
+    minimizeRoadAlertBtn.addEventListener("click", () => {
+      playSound("click");
+      minimizeRoadAlertCard();
+    });
+  }
+
+  const dismissRoadAlertBtn = document.getElementById("dismissRoadAlertBtn");
+  if (dismissRoadAlertBtn) {
+    dismissRoadAlertBtn.addEventListener("click", () => {
+      playSound("click");
+      dismissRoadAlertCard();
     });
   }
 

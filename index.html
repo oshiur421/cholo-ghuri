@@ -344,50 +344,19 @@
 
       </div>
 
-      <!-- Row 2: 3-Column Split HUD Bar (Current Road + Convoy Distance Alert + Police Radar Alert) alongside Group Riders Button -->
-      <div class="hud-row-2 flex items-center justify-between gap-1.5 sm:gap-2.5 w-full pointer-events-auto" style="pointer-events: auto !important; position: relative; z-index: 10005;">
-        <!-- 3-Column Split HUD Bar Container -->
-        <div id="currentRoadBanner" class="hud-3col-bar glass-panel road-banner-glow rounded-xl sm:rounded-2xl border border-emerald-500/20 shadow-2xl flex-1 min-w-0">
-          
-          <!-- Vag 1 (Bam Pashe - Current Road): Navigation icon + CURRENT ROAD label + rastar nam (#currentRoadName) -->
-          <div class="hud-col-road flex items-center gap-1.5 min-w-0">
-            <div class="w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-neon-green flex-shrink-0">
-              <i id="compassIcon" class="fa-solid fa-location-arrow text-[9px] sm:text-[10px] transition-transform duration-300"></i>
-            </div>
-            <div class="flex flex-col min-w-0 text-left">
-              <span class="text-[7.5px] sm:text-[8px] uppercase tracking-widest text-emerald-400/80 font-bold leading-tight truncate">CURRENT ROAD</span>
-              <span id="currentRoadName" class="hud-road-text font-cyber font-bold text-[10.5px] sm:text-xs text-slate-100 truncate" title="Detecting Road...">Detecting Road...</span>
+      <!-- Row 2: Full-width slim bar showing Current Road Name badge and GROUP (X) riders button side by side -->
+      <div class="hud-row-2 flex items-center justify-between gap-1.5 sm:gap-3 w-full pointer-events-auto" style="pointer-events: auto !important; position: relative; z-index: 10005;">
+        <!-- Current Road Name Banner (clean flex layout, no pills inside) -->
+        <div id="currentRoadBanner" class="glass-panel road-banner-glow rounded-xl sm:rounded-2xl px-2.5 py-1.5 sm:px-4 sm:py-2 flex items-center gap-2 sm:gap-3 border border-emerald-500/20 shadow-2xl flex-1 min-w-0">
+          <div class="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-neon-green flex-shrink-0">
+            <i id="compassIcon" class="fa-solid fa-location-arrow text-[10px] sm:text-xs transition-transform duration-300"></i>
+          </div>
+          <div class="flex flex-col min-w-0 text-left flex-1">
+            <span class="text-[7.5px] sm:text-[8.5px] uppercase tracking-widest text-emerald-400/80 font-bold leading-tight">CURRENT ROAD</span>
+            <div id="currentRoadName" class="hud-road-text font-cyber font-bold text-xs sm:text-sm text-slate-100 truncate" title="Dhaka - Mawa Expressway (N8)">
+              Dhaka - Mawa Expressway (N8)
             </div>
           </div>
-
-          <!-- Vag 2 (Majhkhane - Convoy Distance Alert Slot): Compact pill ⚠️ [Rider] • [X]km + [LOCATE] [–] [✕] -->
-          <div id="distanceAlertBanner" data-alias="convoyAlertBanner stragglerAlertBanner" class="hud-col-slot hud-distance-slot hidden">
-            <div class="hud-alert-pill convoy-pill flex items-center justify-between gap-1 w-full min-w-0">
-              <span id="convoyAlertText" class="hud-alert-text font-cyber font-bold text-[9.5px] sm:text-[10.5px] text-amber-300 truncate" title="⚠️ Convoy Formation Alert">
-                ⚠️ Rider • 1.5km
-              </span>
-              <div class="flex items-center gap-1 flex-shrink-0">
-                <button id="viewStragglerBtn" type="button" class="hud-pill-btn hud-pill-btn-locate" title="Locate Straggler Rider">LOCATE</button>
-                <button id="minimizeConvoyAlertBtn" type="button" class="hud-pill-btn hud-pill-btn-min" title="Minimize to Dock">–</button>
-                <button id="dismissConvoyAlertBtn" type="button" class="hud-pill-btn hud-pill-btn-close" title="Permanently Dismiss Alert">✕</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Vag 3 (Daan Pashe - Police Radar Alert Slot): Compact pill 🛡️ Police • [X]m + [VERIFY] [–] [✕] -->
-          <div id="radarAlertBanner" data-alias="approachingPoliceBanner policeAlertBanner" class="hud-col-slot hud-radar-slot hidden">
-            <div class="hud-alert-pill police-pill flex items-center justify-between gap-1 w-full min-w-0">
-              <span id="approachingPoliceText" class="hud-alert-text font-cyber font-bold text-[9.5px] sm:text-[10.5px] text-rose-300 truncate" title="🛡️ Police Radar Alert">
-                🛡️ Police • 850m
-              </span>
-              <div class="flex items-center gap-1 flex-shrink-0">
-                <button id="verifyApproachingBtn" type="button" class="hud-pill-btn hud-pill-btn-verify" title="Verify Police Checkpost">VERIFY</button>
-                <button id="minimizeApproachingBtn" type="button" class="hud-pill-btn hud-pill-btn-min" title="Minimize to Dock">–</button>
-                <button id="dismissApproachingBtn" type="button" class="hud-pill-btn hud-pill-btn-close" title="Permanently Dismiss Alert">✕</button>
-              </div>
-            </div>
-          </div>
-
         </div>
 
         <!-- Group (X) Riders Drawer Button -->
@@ -396,6 +365,90 @@
           <span class="font-cyber font-bold text-[10px] sm:text-xs uppercase tracking-wider pointer-events-none">GROUP (<span id="activeRidersCount" class="pointer-events-none">1</span>)</span>
           <i class="fa-solid fa-chevron-right text-[8px] sm:text-[9px] text-slate-400 pointer-events-none"></i>
         </button>
+      </div>
+
+      <!-- Dedicated Sub-Road Alert Section (Directly underneath CURRENT ROAD bar, never overlapping) -->
+      <div id="subRoadAlertSection" class="sub-road-alert-section pointer-events-auto">
+        <!-- 1. Convoy Distance Gap Alert Card -->
+        <div id="distanceAlertBanner" data-alias="convoyAlertBanner stragglerAlertBanner" class="sub-road-alert-card convoy-alert-card hidden">
+          <div class="alert-card-left flex items-center gap-2.5 min-w-0">
+            <div class="alert-card-icon bg-amber-500/20 text-amber-400 border border-amber-500/40">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <div class="alert-card-text flex flex-col min-w-0">
+              <span class="alert-card-label text-[8px] sm:text-[9px] uppercase tracking-wider text-amber-400 font-bold">Convoy Gap Alert</span>
+              <span id="convoyAlertText" class="alert-card-desc font-cyber font-bold text-xs sm:text-sm text-slate-100">
+                ⚠️ Rider • 1.5 km dure ache!
+              </span>
+            </div>
+          </div>
+          <div class="alert-card-actions flex items-center gap-1.5 flex-shrink-0">
+            <button id="viewStragglerBtn" type="button" class="sub-alert-btn sub-alert-btn-action bg-amber-500/20 hover:bg-amber-500/35 border-amber-500/50 text-amber-300" title="Locate Straggler Rider">
+              <i class="fa-solid fa-location-crosshairs text-[10px]"></i>
+              <span>LOCATE</span>
+            </button>
+            <button id="minimizeConvoyAlertBtn" type="button" class="sub-alert-btn sub-alert-btn-min" title="Minimize Alert to Dock">
+              <i class="fa-solid fa-minus text-[10px]"></i>
+            </button>
+            <button id="dismissConvoyAlertBtn" type="button" class="sub-alert-btn sub-alert-btn-close" title="Permanently Dismiss Alert">
+              <i class="fa-solid fa-xmark text-xs"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- 2. Police Checkpost Alert Card -->
+        <div id="radarAlertBanner" data-alias="approachingPoliceBanner policeAlertBanner" class="sub-road-alert-card police-alert-card hidden">
+          <div class="alert-card-left flex items-center gap-2.5 min-w-0">
+            <div class="alert-card-icon bg-rose-500/20 text-rose-400 border border-rose-500/40">
+              <i class="fa-solid fa-shield-halved"></i>
+            </div>
+            <div class="alert-card-text flex flex-col min-w-0">
+              <span class="alert-card-label text-[8px] sm:text-[9px] uppercase tracking-wider text-rose-400 font-bold">Police Checkpost Radar</span>
+              <span id="approachingPoliceText" class="alert-card-desc font-cyber font-bold text-xs sm:text-sm text-slate-100">
+                🛡️ Police Checkpost • 850m samne (by Sakib)
+              </span>
+            </div>
+          </div>
+          <div class="alert-card-actions flex items-center gap-1.5 flex-shrink-0">
+            <button id="verifyApproachingBtn" type="button" class="sub-alert-btn sub-alert-btn-action bg-rose-500/20 hover:bg-rose-500/35 border-rose-500/50 text-rose-300" title="Verify Police Checkpost">
+              <i class="fa-solid fa-circle-check text-[10px]"></i>
+              <span>VERIFY</span>
+            </button>
+            <button id="minimizeApproachingBtn" type="button" class="sub-alert-btn sub-alert-btn-min" title="Minimize Alert to Dock">
+              <i class="fa-solid fa-minus text-[10px]"></i>
+            </button>
+            <button id="dismissApproachingBtn" type="button" class="sub-alert-btn sub-alert-btn-close" title="Permanently Dismiss Alert">
+              <i class="fa-solid fa-xmark text-xs"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- 3. Speed Limit / Road Alert Card -->
+        <div id="roadTransitionPopup" class="sub-road-alert-card road-alert-card hidden">
+          <div class="alert-card-left flex items-center gap-2.5 min-w-0">
+            <div class="alert-card-icon bg-cyan-500/20 text-cyan-400 border border-cyan-500/40">
+              <i class="fa-solid fa-road"></i>
+            </div>
+            <div class="alert-card-text flex flex-col min-w-0">
+              <span class="alert-card-label text-[8px] sm:text-[9px] uppercase tracking-wider text-cyan-400 font-bold">Speed Limit Alert</span>
+              <span id="roadTransitionAlertText" class="alert-card-desc font-cyber font-bold text-xs sm:text-sm text-slate-100">
+                🛣️ Dhaka - Mawa Expressway (N8) • Speed Limit 80 KM/H
+              </span>
+            </div>
+          </div>
+          <div class="alert-card-actions flex items-center gap-1.5 flex-shrink-0">
+            <button id="viewRoadDetailsBtn" type="button" class="sub-alert-btn sub-alert-btn-action bg-cyan-500/20 hover:bg-cyan-500/35 border-cyan-500/50 text-cyan-300" title="View Road Details Modal">
+              <i class="fa-solid fa-circle-info text-[10px]"></i>
+              <span>DETAILS</span>
+            </button>
+            <button id="minimizeRoadAlertBtn" type="button" class="sub-alert-btn sub-alert-btn-min" title="Minimize Alert to Dock">
+              <i class="fa-solid fa-minus text-[10px]"></i>
+            </button>
+            <button id="dismissRoadAlertBtn" type="button" class="sub-alert-btn sub-alert-btn-close" title="Permanently Dismiss Alert">
+              <i class="fa-solid fa-xmark text-xs"></i>
+            </button>
+          </div>
+        </div>
       </div>
 
     </div>

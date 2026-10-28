@@ -794,325 +794,202 @@ body {
   }
 }
 
-/* ========================================================
-   3-COLUMN SPLIT HUD BAR (#currentRoadBanner & Alert Slots)
-   ======================================================== */
+/* ==================== CURRENT ROAD BANNER ==================== */
 #currentRoadBanner {
-  display: grid !important;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 1.15fr) !important;
+  display: flex !important;
   align-items: center !important;
-  gap: 6px !important;
-  padding: 6px 10px !important;
+  gap: 10px !important;
+  padding: 6px 14px !important;
   box-sizing: border-box !important;
-  min-height: 42px;
+  min-height: 44px;
+  width: auto !important;
+  min-width: 0 !important;
   position: relative;
-  overflow: hidden;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Adaptive column layout when 0 or 1 alert slot is active */
-#currentRoadBanner:not(.has-distance-alert):not(.has-radar-alert) {
-  grid-template-columns: minmax(0, 1fr) !important;
-}
-
-#currentRoadBanner.has-distance-alert:not(.has-radar-alert) {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) !important;
-}
-
-#currentRoadBanner.has-radar-alert:not(.has-distance-alert) {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) !important;
-}
-
-#currentRoadBanner.has-distance-alert.has-radar-alert {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 1.15fr) !important;
-}
-
-/* CSS :has() support fallback */
-#currentRoadBanner:has(#distanceAlertBanner.hidden):has(#radarAlertBanner.hidden) {
-  grid-template-columns: minmax(0, 1fr) !important;
-}
-#currentRoadBanner:has(#distanceAlertBanner:not(.hidden)):has(#radarAlertBanner.hidden) {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) !important;
-}
-#currentRoadBanner:has(#distanceAlertBanner.hidden):has(#radarAlertBanner:not(.hidden)) {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) !important;
-}
-#currentRoadBanner:has(#distanceAlertBanner:not(.hidden)):has(#radarAlertBanner:not(.hidden)) {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 1.15fr) !important;
-}
-
-/* Vag 1: Bam Pashe - Current Road Column */
-.hud-col-road {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  overflow: hidden;
+  transition: all 0.25s ease;
 }
 
 #currentRoadName {
   display: block;
+  font-family: 'Share Tech Mono', monospace, sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1.25;
+  color: #f1f5f9;
   white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
-  font-family: 'Share Tech Mono', monospace, sans-serif;
-  font-weight: 700;
-  font-size: 11px;
-  line-height: 1.2;
-  color: #f1f5f9;
 }
 
-/* Vag 2 & Vag 3: Alert Slots in HUD Bar with Neon Divider */
-.hud-col-slot,
-#distanceAlertBanner,
-#convoyAlertBanner,
-#stragglerAlertBanner,
-#radarAlertBanner,
-#approachingPoliceBanner,
-#policeAlertBanner {
-  position: static !important;
-  top: auto !important;
-  left: auto !important;
-  right: auto !important;
-  bottom: auto !important;
-  transform: none !important;
-  width: auto !important;
-  max-width: none !important;
-  box-shadow: none !important;
-  z-index: auto !important;
+/* ========================================================
+   SUB-ROAD ALERT SECTION (Directly below CURRENT ROAD bar)
+   ======================================================== */
+#subRoadAlertSection {
+  width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+  margin-top: 6px !important;
+  position: relative !important;
+  z-index: 9400 !important;
+  pointer-events: auto !important;
 }
 
-.hud-col-slot {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  border-left: 1px solid rgba(255, 255, 255, 0.12) !important;
-  padding-left: 8px !important;
-  animation: hudSlotFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+.sub-road-alert-card {
+  width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 8px 12px !important;
+  border-radius: 12px !important;
+  background: rgba(15, 23, 42, 0.95) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  box-sizing: border-box !important;
+  position: relative !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65) !important;
+  animation: subAlertSlideDown 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.2s ease;
 }
 
-.hud-col-slot.hidden,
+.sub-road-alert-card.hidden,
 #distanceAlertBanner.hidden,
-#radarAlertBanner.hidden {
+#radarAlertBanner.hidden,
+#roadTransitionPopup.hidden {
   display: none !important;
 }
 
-@keyframes hudSlotFadeIn {
+@keyframes subAlertSlideDown {
   from {
     opacity: 0;
-    transform: scale(0.96);
+    transform: translateY(-8px);
   }
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: translateY(0);
   }
 }
 
-/* Compact Pills inside Alert Slots */
-.hud-alert-pill {
-  width: 100%;
-  min-width: 0;
+/* 1. Convoy Distance Gap Alert Card */
+.sub-road-alert-card.convoy-alert-card {
+  border: 1.5px solid rgba(245, 158, 11, 0.65) !important;
+  box-shadow: 0 4px 20px rgba(245, 158, 11, 0.25), 0 0 12px rgba(245, 158, 11, 0.15) !important;
+}
+
+/* 2. Police Checkpost Radar Alert Card */
+.sub-road-alert-card.police-alert-card {
+  border: 1.5px solid rgba(239, 68, 68, 0.65) !important;
+  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.25), 0 0 12px rgba(239, 68, 68, 0.15) !important;
+}
+
+/* 3. Speed / Road Transition Alert Card */
+.sub-road-alert-card.road-alert-card {
+  border: 1.5px solid rgba(6, 182, 212, 0.65) !important;
+  box-shadow: 0 4px 20px rgba(6, 182, 212, 0.25), 0 0 12px rgba(6, 182, 212, 0.15) !important;
+}
+
+.alert-card-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 4px;
-  padding: 3px 6px;
-  border-radius: 8px;
-  box-sizing: border-box;
+  justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
 }
 
-/* Convoy Distance Alert Compact Pill Style */
-.hud-alert-pill.convoy-pill {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.22) 0%, rgba(180, 83, 9, 0.32) 100%);
-  border: 1px solid rgba(251, 191, 36, 0.55);
-  box-shadow: 0 0 12px rgba(245, 158, 11, 0.25);
-  animation: convoyPillGlow 1.8s infinite alternate ease-in-out;
+.alert-card-text {
+  line-height: 1.25;
 }
 
-@keyframes convoyPillGlow {
-  0% {
-    box-shadow: 0 0 6px rgba(245, 158, 11, 0.2);
-    border-color: rgba(251, 191, 36, 0.4);
-  }
-  100% {
-    box-shadow: 0 0 14px rgba(245, 158, 11, 0.45);
-    border-color: rgba(251, 191, 36, 0.85);
-  }
+.alert-card-desc {
+  line-height: 1.35;
+  color: #f8fafc;
 }
 
-/* Police Radar Alert Compact Pill Style */
-.hud-alert-pill.police-pill {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.22) 0%, rgba(185, 28, 28, 0.32) 100%);
-  border: 1px solid rgba(248, 113, 113, 0.55);
-  box-shadow: 0 0 12px rgba(239, 68, 68, 0.25);
-  animation: policePillGlow 1.6s infinite alternate ease-in-out;
-}
-
-@keyframes policePillGlow {
-  0% {
-    box-shadow: 0 0 6px rgba(239, 68, 68, 0.2);
-    border-color: rgba(248, 113, 113, 0.4);
-  }
-  100% {
-    box-shadow: 0 0 14px rgba(239, 68, 68, 0.5);
-    border-color: rgba(255, 30, 66, 0.9);
-  }
-}
-
-/* Alert text inside Pill */
-.hud-alert-text {
-  font-family: 'Share Tech Mono', monospace, sans-serif;
-  font-size: 10.5px;
-  font-weight: 700;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  line-height: 1.2;
-  letter-spacing: -0.2px;
-}
-
-/* Compact Buttons inside Pills */
-.hud-pill-btn {
+/* Action Buttons inside Sub-Alert Card */
+.sub-alert-btn {
   font-family: 'Orbitron', sans-serif;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.5px;
-  padding: 3px 6px;
-  border-radius: 5px;
+  border-radius: 7px;
   line-height: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 4px;
   cursor: pointer;
   border: 1px solid transparent;
   transition: all 0.15s ease;
   user-select: none;
-  flex-shrink: 0;
   touch-action: manipulation;
 }
 
-.hud-pill-btn:active {
+.sub-alert-btn:active {
   transform: scale(0.92);
 }
 
-/* [LOCATE] Button */
-.hud-pill-btn-locate {
-  background: rgba(245, 158, 11, 0.35);
-  border-color: rgba(251, 191, 36, 0.65);
-  color: #fef08a;
-}
-.hud-pill-btn-locate:hover {
-  background: rgba(245, 158, 11, 0.6);
-  color: #ffffff;
-  border-color: #fef08a;
-  box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
+.sub-alert-btn-action {
+  padding: 6px 11px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
 }
 
-/* [VERIFY] Button */
-.hud-pill-btn-verify {
-  background: rgba(239, 68, 68, 0.35);
-  border-color: rgba(248, 113, 113, 0.65);
-  color: #fecaca;
-}
-.hud-pill-btn-verify:hover {
-  background: rgba(239, 68, 68, 0.6);
-  color: #ffffff;
-  border-color: #fca5a5;
-  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
-}
-
-/* [–] MINIMIZE Button */
-.hud-pill-btn-min {
-  background: rgba(15, 23, 42, 0.75);
-  border-color: rgba(148, 163, 184, 0.45);
+.sub-alert-btn-min {
+  width: 28px;
+  height: 28px;
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.4);
   color: #cbd5e1;
-  padding: 3px 5px;
-  font-size: 11px;
-  font-weight: 900;
 }
-.hud-pill-btn-min:hover {
-  background: rgba(30, 41, 59, 0.95);
+.sub-alert-btn-min:hover {
+  background: rgba(51, 65, 85, 0.95);
   color: #ffffff;
   border-color: #38bdf8;
-  box-shadow: 0 0 6px rgba(56, 189, 248, 0.4);
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
 }
 
-/* [✕] DISMISS Button */
-.hud-pill-btn-close {
-  background: rgba(15, 23, 42, 0.75);
-  border-color: rgba(239, 68, 68, 0.45);
+.sub-alert-btn-close {
+  width: 28px;
+  height: 28px;
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid rgba(239, 68, 68, 0.45);
   color: #fca5a5;
-  padding: 3px 5px;
-  font-size: 9.5px;
-  font-weight: 900;
 }
-.hud-pill-btn-close:hover {
-  background: rgba(220, 38, 38, 0.85);
-  border-color: #ef4444;
+.sub-alert-btn-close:hover {
+  background: rgba(220, 38, 38, 0.9);
   color: #ffffff;
-  box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+  border-color: #ef4444;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
 }
 
-/* ==================== MOBILE RESPONSIVE COMPACT FIT ==================== */
+/* Mobile Responsive Fit */
 @media (max-width: 640px) {
   #currentRoadBanner {
-    padding: 5px 8px !important;
-    gap: 5px !important;
-    min-height: 38px;
+    padding: 5px 10px !important;
+    gap: 8px !important;
   }
-
-  .hud-col-slot {
-    padding-left: 6px !important;
-  }
-
   #currentRoadName {
-    font-size: 10px;
-    max-width: 95px;
+    font-size: 11.5px;
   }
-
-  .hud-alert-text {
-    font-size: 9.5px;
+  .sub-road-alert-card {
+    padding: 7px 10px !important;
   }
-
-  .hud-pill-btn {
-    font-size: 8px;
-    padding: 2.5px 4.5px;
+  .alert-card-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 13px;
   }
-
-  .hud-pill-btn-min,
-  .hud-pill-btn-close {
-    padding: 2.5px 4px;
+  .alert-card-desc {
+    font-size: 11.5px;
   }
-}
-
-@media (max-width: 420px) {
-  #currentRoadBanner {
-    padding: 4px 6px !important;
-    gap: 4px !important;
-    min-height: 36px;
+  .sub-alert-btn-action {
+    padding: 5px 8px;
+    font-size: 9px;
   }
-
-  .hud-col-slot {
-    padding-left: 5px !important;
-  }
-
-  #currentRoadName {
-    font-size: 9.5px;
-    max-width: 70px;
-  }
-
-  .hud-alert-text {
-    font-size: 8.5px;
-  }
-
-  .hud-pill-btn {
-    font-size: 7.5px;
-    padding: 2px 3.5px;
-  }
-
-  .hud-pill-btn-min,
-  .hud-pill-btn-close {
-    padding: 2px 3px;
+  .sub-alert-btn-min,
+  .sub-alert-btn-close {
+    width: 26px;
+    height: 26px;
   }
 }
 
