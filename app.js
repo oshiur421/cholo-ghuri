@@ -6,6 +6,59 @@
 // ==========================================
 // 0. GUARANTEED FAILSAFE LEAFLET MAP INITIALIZER & ACTION HANDLERS
 // ==========================================
+const mapboxToken = 'pk.eyJ1Ijoib3NoaXVyMjQyIiwiYSI6ImNtdnNkaDluazA1NnAzMHF3dnZoc3o4ODgifQ.HNHHnUivjVDOU7z99iX3lg';
+const MAPBOX_TRAFFIC_URLS = {
+  night: `https://api.mapbox.com/styles/v1/mapbox/traffic-night-v2/tiles/512/{z}/{x}/{y}?access_token=${mapboxToken}`,
+  day: `https://api.mapbox.com/styles/v1/mapbox/traffic-day-v2/tiles/512/{z}/{x}/{y}?access_token=${mapboxToken}`
+};
+
+let baseMapLayer = null;
+window.baseMapLayer = null;
+
+let currentMapTheme = 'night';
+try {
+  currentMapTheme = localStorage.getItem('cholo_map_theme') || 'night';
+} catch (e) {}
+
+window.setMapTheme = function(theme) {
+  if (theme !== 'night' && theme !== 'day') theme = 'night';
+  currentMapTheme = theme;
+  try {
+    localStorage.setItem('cholo_map_theme', currentMapTheme);
+  } catch (e) {}
+
+  const targetTileUrl = MAPBOX_TRAFFIC_URLS[currentMapTheme] || MAPBOX_TRAFFIC_URLS.night;
+  const targetLayer = window.baseMapLayer || baseMapLayer;
+  if (targetLayer && typeof targetLayer.setUrl === 'function') {
+    targetLayer.setUrl(targetTileUrl);
+  }
+
+  // Update button UI
+  const themeBtn = document.getElementById('mapThemeToggleBtn');
+  if (themeBtn) {
+    const nightOpt = themeBtn.querySelector('.night-opt');
+    const dayOpt = themeBtn.querySelector('.day-opt');
+    if (currentMapTheme === 'day') {
+      themeBtn.classList.add('day-active');
+      if (nightOpt) nightOpt.classList.remove('active');
+      if (dayOpt) dayOpt.classList.add('active');
+    } else {
+      themeBtn.classList.remove('day-active');
+      if (nightOpt) nightOpt.classList.add('active');
+      if (dayOpt) dayOpt.classList.remove('active');
+    }
+  }
+};
+
+window.toggleMapTheme = function() {
+  const nextTheme = currentMapTheme === 'night' ? 'day' : 'night';
+  window.setMapTheme(nextTheme);
+  if (typeof playSound === 'function') playSound('click');
+  if (typeof showRadarToast === 'function') {
+    showRadarToast('MAP THEME', nextTheme === 'day' ? '☀️ Daytime Traffic Mode Activated' : '🌙 Night Traffic Mode Activated');
+  }
+};
+
 window.ensureLeafletMap = function() {
   const mapEl = document.getElementById('map');
   if (!mapEl || typeof L === 'undefined') return null;
@@ -19,13 +72,23 @@ window.ensureLeafletMap = function() {
     mapEl.innerHTML = '';
   }
   window.map = L.map('map', { zoomControl: false, attributionControl: true }).setView([23.8103, 90.4125], 13);
-  const mapboxToken = 'pk.eyJ1Ijoib3NoaXVyMjQyIiwiYSI6ImNtdnNkaDluazA1NnAzMHF3dnZoc3o4ODgifQ.HNHHnUivjVDOU7z99iX3lg';
-  L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/traffic-night-v2/tiles/512/{z}/{x}/{y}?access_token=${mapboxToken}`, {
+  
+  const initialTileUrl = MAPBOX_TRAFFIC_URLS[currentMapTheme] || MAPBOX_TRAFFIC_URLS.night;
+  baseMapLayer = L.tileLayer(initialTileUrl, {
     maxZoom: 20,
     tileSize: 512,
     zoomOffset: -1,
     attribution: '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a>'
   }).addTo(window.map);
+  window.baseMapLayer = baseMapLayer;
+
+  // Sync button UI with current theme on map load
+  setTimeout(() => {
+    if (typeof window.setMapTheme === 'function') {
+      window.setMapTheme(currentMapTheme);
+    }
+  }, 100);
+
   setTimeout(() => window.map.invalidateSize(), 150);
   setTimeout(() => window.map.invalidateSize(), 600);
   return window.map;
@@ -6915,6 +6978,17 @@ function initApp() {
       playSound("click");
       dismissRoadTransitionPopup();
     });
+  }
+
+  // Live Map Theme Switcher Button (Night / Day Traffic)
+  const mapThemeToggleBtn = document.getElementById("mapThemeToggleBtn");
+  if (mapThemeToggleBtn) {
+    mapThemeToggleBtn.addEventListener("click", () => {
+      window.toggleMapTheme();
+    });
+  }
+  if (typeof window.setMapTheme === "function") {
+    window.setMapTheme(currentMapTheme);
   }
 
   // Police Report Button

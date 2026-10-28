@@ -1986,6 +1986,56 @@ body {
   }
 }
 
+/* ==================== LIVE MAP THEME SWITCHER (DAY / NIGHT) ==================== */
+.theme-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(13, 19, 34, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  flex-shrink: 0;
+  white-space: nowrap;
+  user-select: none;
+}
+.theme-toggle-btn:hover {
+  background: rgba(19, 28, 49, 0.95);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+.theme-toggle-btn .theme-opt {
+  transition: color 0.2s ease, text-shadow 0.2s ease;
+}
+.theme-toggle-btn .theme-opt.active {
+  color: #00ff87;
+  text-shadow: 0 0 8px rgba(0, 255, 135, 0.5);
+}
+.theme-toggle-btn.day-active {
+  border-color: rgba(250, 204, 21, 0.5);
+  box-shadow: 0 0 12px rgba(250, 204, 21, 0.2);
+}
+.theme-toggle-btn.day-active .day-opt.active {
+  color: #facc15;
+  text-shadow: 0 0 8px rgba(250, 204, 21, 0.5);
+}
+.theme-divider {
+  opacity: 0.35;
+}
+
+@media (max-width: 640px) {
+  .theme-toggle-btn {
+    padding: 5px 8px;
+    font-size: 9.5px;
+    gap: 4px;
+  }
+}
+
 /* ==========================================
    GROUP TOUR & MULTI-STOP WAYPOINT PLANNER
    ========================================== */
