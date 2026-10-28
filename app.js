@@ -541,6 +541,8 @@ let currentSession = {
   isLeader: false,
   subgroup: "All Riders"
 };
+let currentSubgroup = "All Riders";
+window.currentSubgroup = currentSubgroup;
 
 // Live Rider Telemetry (Default: Dhaka Highway Core)
 let riderLocation = {
@@ -3175,6 +3177,7 @@ async function broadcastCurrentLocation(updatePresence = false) {
     id: currentSession.riderId,
     rider_name: currentSession.riderName,
     is_leader: currentSession.isLeader,
+    subgroup: (currentSession && currentSession.subgroup) || currentSubgroup || "All Riders",
     lat: riderLocation.lat,
     lng: riderLocation.lng,
     speed: Math.round(riderLocation.speed * 10) / 10,
@@ -3755,7 +3758,12 @@ function saveSession(riderName, roomCode, isLeader) {
 
 function loadSavedSession() {
   try {
-    const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
+    let savedSubgroup = null;
+    try {
+      savedSubgroup = localStorage.getItem("cg_rider_subgroup") || sessionStorage.getItem("cg_rider_subgroup");
+    } catch (e) {}
+
+    const raw = sessionStorage.getItem(SESSION_STORAGE_KEY) || localStorage.getItem(SESSION_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && parsed.riderName && parsed.roomCode && parsed.roomCode !== "----") {
@@ -3764,9 +3772,11 @@ function loadSavedSession() {
           parsed.riderId = generateUUID();
         }
         if (!parsed.subgroup) {
-          parsed.subgroup = "All Riders";
+          parsed.subgroup = savedSubgroup || "All Riders";
         }
         currentSession = parsed;
+        currentSubgroup = currentSession.subgroup || "All Riders";
+        window.currentSubgroup = currentSubgroup;
         return true;
       }
     }
@@ -4553,6 +4563,7 @@ async function sendPttVoiceMessage(audioData) {
     room_code: cleanRoom,
     sender_id: currentSession.riderId,
     sender_name: currentSession.riderName || "Rider",
+    subgroup: (currentSession && currentSession.subgroup) || currentSubgroup || "All Riders",
     audio_data: audioData,
     created_at: new Date().toISOString()
   };
@@ -4629,6 +4640,13 @@ function handleIncomingVoiceList(list) {
 function handleIncomingVoiceMessage(msg) {
   if (!msg || !msg.audio_data) return;
   if (msg.sender_id && msg.sender_id === currentSession.riderId) return;
+
+  // Squad walkie-talkie filtering
+  const mySubgroup = (currentSession && currentSession.subgroup) || currentSubgroup || "All Riders";
+  const msgSubgroup = msg.subgroup || "All Riders";
+  if (mySubgroup !== "All Riders" && msgSubgroup !== "All Riders" && msgSubgroup !== mySubgroup) {
+    return; // Destined for another squad
+  }
 
   const msgKey = msg.msgId || (msg.id ? ("db_" + msg.id) : null) || ("voice_" + (msg.sender_id || "") + "_" + (msg.created_at || ""));
   if (playedVoiceIds.has(msgKey)) return;
@@ -5468,18 +5486,52 @@ window.openTourPlanner = function() {
   // Sync inputs
   const nameInput = document.getElementById("tourPlanNameInput");
   const subgroupSelect = document.getElementById("tourSubgroupSelect");
-  const currentSubgroupBadge = document.getElementById("currentRiderSubgroupBadge");
+  const subgroupCustomInput = document.getElementById("tourSubgroupCustomInput");
 
-  const mySubgroup = (currentSession && currentSession.subgroup) || "All Riders";
-  if (currentSubgroupBadge) currentSubgroupBadge.textContent = mySubgroup.toUpperCase();
+  // Generate smart placeholder like "DHAKA646 Tour Plan"
+  const room = (currentSession && currentSession.roomCode && currentSession.roomCode !== "----")
+    ? currentSession.roomCode.trim().toUpperCase()
+    : "CONVOY";
+  const smartTourPlaceholder = `${room} Tour Plan`;
+
+  if (nameInput) {
+    nameInput.placeholder = smartTourPlaceholder;
+  }
+
+  const mySubgroup = (currentSession && currentSession.subgroup) || currentSubgroup || "All Riders";
 
   if (activeTourPlan) {
     if (nameInput) nameInput.value = activeTourPlan.name || "";
-    if (subgroupSelect) subgroupSelect.value = activeTourPlan.subgroup || "All Riders";
+    if (subgroupSelect) {
+      const isStandard = Array.from(subgroupSelect.options).some(o => o.value === activeTourPlan.subgroup);
+      if (isStandard) {
+        subgroupSelect.value = activeTourPlan.subgroup;
+        if (subgroupCustomInput) subgroupCustomInput.classList.add("hidden");
+      } else {
+        subgroupSelect.value = "__custom__";
+        if (subgroupCustomInput) {
+          subgroupCustomInput.value = activeTourPlan.subgroup;
+          subgroupCustomInput.classList.remove("hidden");
+        }
+      }
+    }
     tourBuilderWaypoints = JSON.parse(JSON.stringify(activeTourPlan.waypoints || []));
   } else {
     if (nameInput && !nameInput.value) {
-      nameInput.value = `${currentSession.roomCode || "Convoy"} Tour Plan`;
+      nameInput.value = smartTourPlaceholder;
+    }
+    if (subgroupSelect) {
+      const isStandard = Array.from(subgroupSelect.options).some(o => o.value === mySubgroup);
+      if (isStandard) {
+        subgroupSelect.value = mySubgroup;
+        if (subgroupCustomInput) subgroupCustomInput.classList.add("hidden");
+      } else {
+        subgroupSelect.value = "__custom__";
+        if (subgroupCustomInput) {
+          subgroupCustomInput.value = mySubgroup;
+          subgroupCustomInput.classList.remove("hidden");
+        }
+      }
     }
   }
 
@@ -5494,16 +5546,19 @@ window.closeTourPlanner = function() {
 };
 
 // Subgroup Switcher
-window.switchRiderSubgroup = function() {
+window.switchRiderSubgroup = function(explicitVal) {
   const subgroupSelect = document.getElementById("tourSubgroupSelect");
   const subgroupCustomInput = document.getElementById("tourSubgroupCustomInput");
-  let val = subgroupSelect ? subgroupSelect.value : "All Riders";
+  let val = explicitVal || (subgroupSelect ? subgroupSelect.value : "All Riders");
   if (val === "__custom__") {
     val = (subgroupCustomInput && subgroupCustomInput.value.trim()) || "Custom Squad";
   }
 
   currentSession.subgroup = val;
+  currentSubgroup = val;
+  window.currentSubgroup = val;
   try {
+    localStorage.setItem("cg_rider_subgroup", val);
     sessionStorage.setItem("cg_rider_subgroup", val);
     const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
     if (raw) {
@@ -5511,10 +5566,17 @@ window.switchRiderSubgroup = function() {
       parsed.subgroup = val;
       sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(parsed));
     }
+    const localRaw = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (localRaw) {
+      const parsedLocal = JSON.parse(localRaw);
+      parsedLocal.subgroup = val;
+      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(parsedLocal));
+    }
   } catch (e) {}
 
-  const badge = document.getElementById("currentRiderSubgroupBadge");
-  if (badge) badge.textContent = val.toUpperCase();
+  if (typeof broadcastLocation === "function") {
+    broadcastLocation(true);
+  }
 
   showRadarToast("SUBGROUP JOINED", `You are now tracking subgroup: ${val}`);
   playSound("click");
@@ -5549,17 +5611,62 @@ async function activateAndBroadcastTourPlan() {
   const subgroupSelect = document.getElementById("tourSubgroupSelect");
   const subgroupCustomInput = document.getElementById("tourSubgroupCustomInput");
 
+  // a) Read value from ASSIGN TOUR TO dropdown
   let subgroupVal = (subgroupSelect ? subgroupSelect.value : "All Riders") || "All Riders";
   if (subgroupVal === "__custom__") {
     subgroupVal = (subgroupCustomInput && subgroupCustomInput.value.trim()) || "Alpha Squad";
   }
 
-  const tourName = (nameInput && nameInput.value.trim()) ||
-    `${tourBuilderWaypoints[0].name.split("(")[0].trim()} ➔ ${tourBuilderWaypoints[tourBuilderWaypoints.length - 1].name.split("(")[0].trim()} (${subgroupVal})`;
+  // b) Automatically update user's currentSubgroup variable to match this selection
+  currentSession.subgroup = subgroupVal;
+  currentSubgroup = subgroupVal;
+  window.currentSubgroup = subgroupVal;
 
+  // c) Save this new subgroup to localStorage & sessionStorage
+  try {
+    localStorage.setItem("cg_rider_subgroup", subgroupVal);
+    sessionStorage.setItem("cg_rider_subgroup", subgroupVal);
+    const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      parsed.subgroup = subgroupVal;
+      sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(parsed));
+    }
+    const localRaw = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (localRaw) {
+      const parsedLocal = JSON.parse(localRaw);
+      parsedLocal.subgroup = subgroupVal;
+      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(parsedLocal));
+    }
+  } catch (e) {}
+
+  // Broadcast location & presence with updated squad tag
+  if (typeof broadcastLocation === "function") {
+    broadcastLocation(true);
+  }
+
+  // Update Top HUD tour subgroup tag if visible
+  const subgroupTag = document.getElementById("tourSubgroupTag");
+  if (subgroupTag) subgroupTag.textContent = subgroupVal.toUpperCase();
+
+  // Smart Tour Name Placeholder logic
+  const room = (currentSession.roomCode || "DHAKA101").trim().toUpperCase();
+  const smartTourPlaceholder = `${room} Tour Plan`;
+  let tourName = (nameInput && nameInput.value.trim());
+  if (!tourName) {
+    if (tourBuilderWaypoints.length >= 2) {
+      const fromName = tourBuilderWaypoints[0].name.split("(")[0].trim();
+      const toName = tourBuilderWaypoints[tourBuilderWaypoints.length - 1].name.split("(")[0].trim();
+      tourName = `${fromName} ➔ ${toName} (${subgroupVal})`;
+    } else {
+      tourName = smartTourPlaceholder;
+    }
+  }
+
+  // d) Broadcast the new Tour Plan specifically tagged with this subgroup name to Supabase
   const tourPlan = {
     id: "tour_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6),
-    room_code: (currentSession.roomCode || "DHAKA101").trim().toUpperCase(),
+    room_code: room,
     subgroup: subgroupVal,
     name: tourName,
     creator_id: currentSession.riderId,
@@ -5609,7 +5716,7 @@ async function activateAndBroadcastTourPlan() {
     console.debug("[tour_plans REST insert note - graceful fallback]", restErr);
   }
 
-  showRadarToast("🚀 TOUR PLAN ACTIVATED", `Tour "${tourPlan.name}" active for ${tourPlan.subgroup}!`);
+  showRadarToast("🚀 TOUR ACTIVATED", `Tour "${tourPlan.name}" active! Squad assigned: ${tourPlan.subgroup}`);
   playSound("join");
   window.closeTourPlanner();
 }

@@ -1035,29 +1035,31 @@
       <!-- Modal Body (Scrollable) -->
       <div class="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 custom-scrollbar relative z-10">
         
-        <!-- Section 1: Tour Name & Subgroup Selector -->
-        <div class="bg-slate-900/80 border border-slate-800/90 rounded-2xl p-3.5 sm:p-4 space-y-3 shadow-inner">
-          <div class="flex flex-col gap-1.5">
-            <label class="text-[10.5px] font-cyber font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-              <i class="fa-solid fa-pen-nib text-cyan-400"></i> Tour / Subgroup Name
-            </label>
-            <input 
-              type="text" 
-              id="tourPlanNameInput" 
-              placeholder="e.g. Dhaka -> Bandarban (Alpha Squad)"
-              class="w-full bg-slate-950/90 border border-slate-700 focus:border-cyan-400 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-cyber text-slate-100 placeholder-slate-500 outline-none transition-colors shadow-inner"
-            >
-          </div>
+        <!-- Section 1: Tour Name & Assign Tour Subgroup -->
+        <div class="tour-config-card p-3.5 sm:p-4 space-y-3.5">
+          <div class="grid grid-cols-1 sm:grid-cols-12 gap-3.5 items-start">
+            
+            <!-- Tour Name Input (7 cols on sm) -->
+            <div class="sm:col-span-7 flex flex-col gap-1.5">
+              <label for="tourPlanNameInput" class="text-[10.5px] font-cyber font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                <i class="fa-solid fa-route text-cyan-400"></i> Tour Name
+              </label>
+              <input 
+                type="text" 
+                id="tourPlanNameInput" 
+                placeholder="e.g. DHAKA101 Tour Plan"
+                class="w-full bg-slate-950/90 border border-slate-700/80 focus:border-cyan-400 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-cyber text-slate-100 placeholder-slate-500 outline-none transition-all shadow-inner"
+              >
+            </div>
 
-          <!-- Subgroup Selection & Filtering -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-            <div class="flex flex-col gap-1.5">
-              <label class="text-[10.5px] font-cyber font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                <i class="fa-solid fa-people-group text-emerald-400"></i> Target Subgroup
+            <!-- Target Subgroup Dropdown (5 cols on sm) -->
+            <div class="sm:col-span-5 flex flex-col gap-1.5">
+              <label for="tourSubgroupSelect" class="text-[10.5px] font-cyber font-bold uppercase tracking-wider text-emerald-300 flex items-center gap-1.5">
+                <i class="fa-solid fa-tower-broadcast text-emerald-400"></i> 📡 ASSIGN TOUR TO:
               </label>
               <select 
                 id="tourSubgroupSelect" 
-                class="w-full bg-slate-950/90 border border-slate-700 focus:border-emerald-400 rounded-xl px-3 py-2 text-xs font-cyber text-slate-200 outline-none transition-colors cursor-pointer"
+                class="w-full bg-slate-950/90 border border-slate-700/80 focus:border-emerald-400 rounded-xl px-3 py-2.5 text-xs font-cyber text-slate-200 outline-none transition-all cursor-pointer shadow-inner"
               >
                 <option value="All Riders">🌐 All Riders (Full Convoy)</option>
                 <option value="Alpha Squad">⚡ Alpha Squad</option>
@@ -1071,30 +1073,10 @@
                 type="text" 
                 id="tourSubgroupCustomInput" 
                 placeholder="Type custom subgroup name..." 
-                class="hidden w-full mt-1 bg-slate-950 border border-emerald-500/50 rounded-lg px-2.5 py-1.5 text-xs font-cyber text-emerald-300 outline-none"
+                class="hidden w-full mt-1.5 bg-slate-950 border border-emerald-500/60 focus:border-emerald-400 rounded-xl px-3 py-2 text-xs font-cyber text-emerald-300 outline-none shadow-inner transition-all"
               >
             </div>
 
-            <!-- Current Rider Subgroup Tag & Alignment -->
-            <div class="flex flex-col justify-between p-2.5 rounded-xl bg-slate-950/60 border border-slate-800">
-              <div class="flex items-center justify-between text-[10px]">
-                <span class="text-slate-400 font-cyber">YOUR ACTIVE SUBGROUP:</span>
-                <span id="currentRiderSubgroupBadge" class="font-hud font-bold text-cyan-300 px-2 py-0.5 rounded bg-cyan-950/60 border border-cyan-800">
-                  ALL RIDERS
-                </span>
-              </div>
-              <div class="flex items-center gap-2 mt-2">
-                <button 
-                  type="button" 
-                  id="setMySubgroupBtn" 
-                  title="Switch your rider profile to the selected subgroup"
-                  class="flex-1 py-1.5 px-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 active:scale-95 text-neon-green border border-emerald-500/40 text-[10px] font-cyber font-bold uppercase transition-all cursor-pointer flex items-center justify-center gap-1"
-                >
-                  <i class="fa-solid fa-right-left text-[9px]"></i>
-                  <span>Switch to This Subgroup</span>
-                </button>
-              </div>
-            </div>
           </div>
         </div>
 

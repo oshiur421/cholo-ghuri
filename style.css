@@ -1857,6 +1857,19 @@ body {
   transform: scale(0.95);
 }
 
+/* 1b. Sleek Integrated Tour Header & Subgroup Selector */
+.tour-config-card {
+  background: rgba(10, 15, 26, 0.9);
+  border: 1px solid rgba(0, 240, 255, 0.22);
+  border-radius: 1rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+.tour-config-card:focus-within {
+  border-color: rgba(0, 240, 255, 0.55);
+  box-shadow: 0 0 25px rgba(0, 240, 255, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
 /* 2. Preset Chips */
 .preset-chip {
   padding: 4px 10px;
