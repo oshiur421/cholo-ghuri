@@ -5315,18 +5315,18 @@ async function renderTourOnMap(tourPlan, fitBounds = false) {
     const routeRes = await fetchOSRMRoute(tourPlan.waypoints);
     if (routeRes && routeRes.coordinates && routeRes.coordinates.length > 0) {
       if (!routeRes.fallback) {
-        // Outer cyan glow polyline
+        // Outer neon-green glow polyline
         tourRouteGlowPolyline = L.polyline(routeRes.coordinates, {
-          color: "#00e5ff",
-          weight: 8,
-          opacity: 0.35,
+          color: "rgba(0, 255, 135, 0.45)",
+          weight: 9,
+          opacity: 0.6,
           lineCap: "round",
           lineJoin: "round"
         }).addTo(tourRouteLayerGroup);
 
-        // Inner neon emerald polyline
+        // Inner signature neon-green polyline (#00ff87)
         tourRoutePolyline = L.polyline(routeRes.coordinates, {
-          color: "#00ff88",
+          color: "#00ff87",
           weight: 4.5,
           opacity: 0.95,
           lineCap: "round",
@@ -5335,11 +5335,12 @@ async function renderTourOnMap(tourPlan, fitBounds = false) {
       } else {
         // Clean dashed neon polyline fallback
         tourRoutePolyline = L.polyline(routeRes.coordinates, {
-          color: "#00f0ff",
-          weight: 4,
-          opacity: 0.9,
+          color: "#00ff87",
+          weight: 4.5,
+          opacity: 0.95,
           dashArray: "8, 12",
-          lineCap: "round"
+          lineCap: "round",
+          lineJoin: "round"
         }).addTo(tourRouteLayerGroup);
       }
 

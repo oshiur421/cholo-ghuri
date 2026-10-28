@@ -17,7 +17,7 @@
           colors: {
             'cyber-dark': '#070a0f',
             'cyber-card': 'rgba(11, 17, 27, 0.85)',
-            'neon-green': '#00ff88',
+            'neon-green': '#00ff87',
             'neon-orange': '#ff7700',
             'police-blue': '#0077ff',
             'police-red': '#ff1e42'
@@ -272,8 +272,18 @@
         
         <!-- Left: Logo Badge, Room Code, Join Button, Share, DB Sync Dot -->
         <div class="glass-panel-neon rounded-xl sm:rounded-2xl p-1.5 sm:px-3 sm:py-2 flex items-center gap-1.5 sm:gap-2.5 pointer-events-auto shadow-2xl flex-shrink min-w-0">
-          <div class="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-black/60 border border-emerald-500/40 flex items-center justify-center text-neon-green shadow-inner flex-shrink-0">
-            <i class="fa-solid fa-motorcycle text-xs sm:text-base"></i>
+          <div class="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-slate-900 border border-[#00ff87] flex items-center justify-center shadow-[0_0_12px_rgba(0,255,135,0.35)] flex-shrink-0" title="Cholo Ghuri">
+            <svg class="w-5 h-5 sm:w-6 sm:h-6" viewBox="0 0 100 100" fill="none" stroke="#00ff87" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+              <!-- Rear Wheel + Infinity Loop (∞) -->
+              <circle cx="24" cy="68" r="13"/>
+              <path d="M 24 68 C 20.5 61.5 15 61.5 15 68 C 15 74.5 20.5 74.5 24 68 C 27.5 61.5 33 61.5 33 68 C 33 74.5 27.5 74.5 24 68 Z"/>
+              <!-- Front Wheel + Location Pin (📍) -->
+              <circle cx="76" cy="68" r="13"/>
+              <path d="M 76 75 C 72.8 71.5 71 68 71 65 C 71 62.2 73.2 60 76 60 C 78.8 60 81 62.2 81 65 C 81 68 79.2 71.5 76 75 Z"/>
+              <circle cx="76" cy="64.5" r="1.5" fill="#00ff87" stroke="none"/>
+              <!-- Continuous Aerodynamic Biker Body & Frame Line -->
+              <path d="M 16 48 C 24 45 28 45 36 50 C 42 54 44 42 50 38 C 55 35 60 36 64 36 L 68 30 M 61 38 L 76 68 M 59 45 L 49 63 L 34 63 L 24 68"/>
+            </svg>
           </div>
           <div class="flex flex-col min-w-0">
             <div class="flex items-center gap-1">
@@ -756,8 +766,18 @@
 
       <!-- Header & Branding -->
       <div class="text-center mb-6 relative">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-slate-900 border-2 border-emerald-400 text-neon-green shadow-[0_0_25px_rgba(0,255,136,0.35)] mb-3">
-          <i class="fa-solid fa-motorcycle text-3xl"></i>
+        <div class="cholo-ghuri-brand-logo">
+          <svg viewBox="0 0 100 100" fill="none" stroke="#00ff87" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+            <!-- Rear Wheel + Infinity Loop (∞) -->
+            <circle cx="24" cy="68" r="13"/>
+            <path d="M 24 68 C 20.5 61.5 15 61.5 15 68 C 15 74.5 20.5 74.5 24 68 C 27.5 61.5 33 61.5 33 68 C 33 74.5 27.5 74.5 24 68 Z"/>
+            <!-- Front Wheel + Location Pin (📍) -->
+            <circle cx="76" cy="68" r="13"/>
+            <path d="M 76 75 C 72.8 71.5 71 68 71 65 C 71 62.2 73.2 60 76 60 C 78.8 60 81 62.2 81 65 C 81 68 79.2 71.5 76 75 Z"/>
+            <circle cx="76" cy="64.5" r="1.5" fill="#00ff87" stroke="none"/>
+            <!-- Continuous Aerodynamic Biker Body & Frame Line -->
+            <path d="M 16 48 C 24 45 28 45 36 50 C 42 54 44 42 50 38 C 55 35 60 36 64 36 L 68 30 M 61 38 L 76 68 M 59 45 L 49 63 L 34 63 L 24 68"/>
+          </svg>
         </div>
         <h1 class="font-cyber font-black text-2xl sm:text-3xl tracking-wider text-slate-100 flex items-center justify-center gap-2">
           CHOLO GHURI

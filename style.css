@@ -1,15 +1,15 @@
 @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,400;0,600;0,700;1,700&family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
-  --neon-green: #00ff88;
-  --neon-green-glow: rgba(0, 255, 136, 0.45);
+  --neon-green: #00ff87;
+  --neon-green-glow: rgba(0, 255, 135, 0.45);
   --neon-orange: #ff7700;
   --neon-orange-glow: rgba(255, 119, 0, 0.45);
   --police-blue: #0077ff;
   --police-red: #ff1e42;
   --cyber-dark: #070a0f;
   --cyber-card: rgba(11, 17, 27, 0.82);
-  --cyber-border: rgba(0, 255, 136, 0.22);
+  --cyber-border: rgba(0, 255, 135, 0.22);
 }
 
 * {
@@ -80,11 +80,11 @@ body {
 }
 
 .neon-btn-green {
-  background: linear-gradient(135deg, #00ff88 0%, #00b35f 100%);
+  background: linear-gradient(135deg, #00ff87 0%, #00b35f 100%);
   color: #03150d;
   font-weight: 800;
   letter-spacing: 0.05em;
-  box-shadow: 0 0 20px rgba(0, 255, 136, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  box-shadow: 0 0 20px rgba(0, 255, 135, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.4);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -360,6 +360,27 @@ body {
   position: fixed !important;
   inset: 0 !important;
   z-index: 99999 !important;
+}
+
+/* ==================== CHOLO GHURI BRAND LOGO ==================== */
+.cholo-ghuri-brand-logo {
+  width: 80px;
+  height: 80px;
+  background: #0f172a; /* ডার্ক ব্যাকগ্রাউন্ড */
+  border: 2px solid #00ff87; /* নিয়ন গ্রিন বর্ডার */
+  border-radius: 20px; /* রাউন্ডেড স্কয়ার */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 20px rgba(0, 255, 135, 0.4); /* পারফেক্ট নিয়ন গ্লো */
+  margin: 0 auto 15px auto;
+}
+.cholo-ghuri-brand-logo svg {
+  width: 54px;
+  height: 54px;
+  stroke: #00ff87; /* সিগনেচার নিয়ন-গ্রিন */
+  stroke-width: 2.5px;
+  fill: none;
 }
 
 .leaflet-control-zoom {
@@ -1668,13 +1689,13 @@ body {
   height: 64px;
   border-radius: 50%;
   background: radial-gradient(circle at 35% 35%, #132233 0%, #070e17 80%, #03070b 100%);
-  border: 2.5px solid #00ff88;
+  border: 2.5px solid #00ff87;
   color: #f1f5f9;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.75), 0 0 18px rgba(0, 255, 136, 0.45), inset 0 2px 4px rgba(255, 255, 255, 0.25);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.75), 0 0 18px rgba(0, 255, 135, 0.45), inset 0 2px 4px rgba(255, 255, 255, 0.25);
   transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease, border-color 0.2s ease;
   outline: none;
   -webkit-tap-highlight-color: transparent;
@@ -2069,17 +2090,17 @@ body {
 .tour-target-start,
 .tour-marker-start {
   background: radial-gradient(circle at 35% 35%, #059669, #022c1b);
-  border: 2px solid #00ff88;
-  color: #00ff88;
-  box-shadow: 0 0 10px rgba(0, 255, 136, 0.75), 0 2px 6px rgba(0, 0, 0, 0.85);
+  border: 2px solid #00ff87;
+  color: #00ff87;
+  box-shadow: 0 0 10px rgba(0, 255, 135, 0.75), 0 2px 6px rgba(0, 0, 0, 0.85);
 }
 .tour-target-start .tour-target-letter {
   color: #ffffff;
-  text-shadow: 0 0 4px #00ff88;
+  text-shadow: 0 0 4px #00ff87;
 }
 .tour-target-start .tour-target-pip {
-  border-color: #00ff88;
-  color: #00ff88;
+  border-color: #00ff87;
+  color: #00ff87;
 }
 
 /* 🤝 REGROUP (Cyan / Amber Pulsing) */
