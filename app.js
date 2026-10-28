@@ -20,7 +20,7 @@ window.ensureLeafletMap = function() {
   }
   window.map = L.map('map', { zoomControl: false, attributionControl: true }).setView([23.8103, 90.4125], 13);
   const mapboxToken = 'pk.eyJ1Ijoib3NoaXVyMjQyIiwiYSI6ImNtdnNkaDluazA1NnAzMHF3dnZoc3o4ODgifQ.HNHHnUivjVDOU7z99iX3lg';
-  L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/navigation-night-v1/tiles/512/{z}/{x}/{y}?access_token=${mapboxToken}`, {
+  L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/traffic-night-v2/tiles/512/{z}/{x}/{y}?access_token=${mapboxToken}`, {
     maxZoom: 20,
     tileSize: 512,
     zoomOffset: -1,
