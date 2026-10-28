@@ -1323,15 +1323,15 @@ function evaluatePoliceProximity() {
     }
   });
 
-  const banner = document.getElementById("approachingPoliceBanner");
+  const banner = document.getElementById("radarAlertBanner") || document.getElementById("approachingPoliceBanner");
   const bannerText = document.getElementById("approachingPoliceText");
 
   if (closest && minDistanceKm <= APPROACHING_POLICE_DISTANCE_KM) {
     closestApproachingPolice = closest;
-    const distFormatted = minDistanceKm < 1 ? `${Math.round(minDistanceKm * 1000)} meters` : `${minDistanceKm.toFixed(1)} km`;
+    const distFormatted = minDistanceKm < 1 ? `${Math.round(minDistanceKm * 1000)}m` : `${minDistanceKm.toFixed(1)}km`;
 
     if (bannerText) {
-      bannerText.textContent = `🚓 POLICE CHECKPOST AHEAD (${distFormatted} away) - Reported by ${closest.reported_by || "Biker"}`;
+      bannerText.textContent = `🛡️ Police • ${distFormatted}`;
     }
 
     const now = Date.now();
@@ -1354,6 +1354,8 @@ function evaluatePoliceProximity() {
   } else {
     closestApproachingPolice = null;
     if (banner) banner.classList.add("hidden");
+    const roadBanner = document.getElementById("currentRoadBanner");
+    if (roadBanner) roadBanner.classList.remove("has-radar-alert");
     hideMiniRadarAlert(closest ? closest.id : null);
     hideMiniPoliceAlert(closest ? closest.id : null);
   }
@@ -1634,27 +1636,54 @@ function hideMiniRadarAlert(reportId) {
 }
 window.hideMiniRadarAlert = hideMiniRadarAlert;
 
+// ==========================================
+// 3-COLUMN SPLIT HUD BAR ALERT FORMATTERS
+// ==========================================
+function formatConvoyAlertText(rider) {
+  if (!rider) return "⚠️ Rider Alert";
+  const name = rider.rider_name || "Rider";
+  const gapKm = rider.distanceToLeader !== undefined ? rider.distanceToLeader : 1.5;
+  const gapStr = gapKm < 1 ? `${Math.round(gapKm * 1000)}m` : `${gapKm.toFixed(1)}km`;
+  return `⚠️ ${name} • ${gapStr}`;
+}
+
+function formatRadarAlertText(report, distKm) {
+  if (distKm === undefined || distKm === null) {
+    if (report && (report.lat || report.lng)) {
+      distKm = calculateDistanceKm(riderLocation.lat, riderLocation.lng, report.lat, report.lng);
+    } else {
+      distKm = 0.5;
+    }
+  }
+  const distStr = distKm < 1 ? `${Math.round(distKm * 1000)}m` : `${distKm.toFixed(1)}km`;
+  return `🛡️ Police • ${distStr}`;
+}
+
 window.expandMiniRadarAlert = function(reportId) {
-  const report = policeReportsMap.get(reportId) || closestApproachingPolice;
-  const banner = document.getElementById("approachingPoliceBanner");
+  const report = (reportId && policeReportsMap.get(reportId)) || closestApproachingPolice;
+  const banner = document.getElementById("radarAlertBanner") || document.getElementById("approachingPoliceBanner");
   const bannerText = document.getElementById("approachingPoliceText");
   if (report) {
     closestApproachingPolice = report;
     const distKm = report.distanceToBiker || calculateDistanceKm(riderLocation.lat, riderLocation.lng, report.lat, report.lng);
-    const distFormatted = distKm < 1 ? `${Math.round(distKm * 1000)} meters` : `${distKm.toFixed(1)} km`;
     if (bannerText) {
-      bannerText.textContent = `🚓 POLICE CHECKPOST AHEAD (${distFormatted} away) - Reported by ${report.reported_by || "Biker"}`;
+      bannerText.textContent = formatRadarAlertText(report, distKm);
+      bannerText.title = `Police Checkpost ahead (${distKm < 1 ? Math.round(distKm * 1000) + "m" : distKm.toFixed(1) + "km"} away)`;
     }
   }
   if (banner) {
     banner.classList.remove("hidden");
+    const roadBanner = document.getElementById("currentRoadBanner");
+    if (roadBanner) roadBanner.classList.add("has-radar-alert");
   }
 };
 
 function minimizeApproachingPoliceAlert() {
-  const banner = document.getElementById("approachingPoliceBanner");
+  const banner = document.getElementById("radarAlertBanner") || document.getElementById("approachingPoliceBanner");
   if (banner) banner.classList.add("hidden");
-  // Round icon remains docked!
+  const roadBanner = document.getElementById("currentRoadBanner");
+  if (roadBanner) roadBanner.classList.remove("has-radar-alert");
+  // Round icon remains docked in #miniAlertDock!
 }
 window.minimizeApproachingPoliceAlert = minimizeApproachingPoliceAlert;
 
@@ -1664,9 +1693,12 @@ function dismissApproachingPoliceAlert() {
     markAlertAsDismissed(`radar_banner_${rawId}`);
     markAlertAsDismissed(rawId);
     hideMiniRadarAlert(rawId);
+    hideMiniPoliceAlert(rawId);
   }
-  const banner = document.getElementById("approachingPoliceBanner");
+  const banner = document.getElementById("radarAlertBanner") || document.getElementById("approachingPoliceBanner");
   if (banner) banner.classList.add("hidden");
+  const roadBanner = document.getElementById("currentRoadBanner");
+  if (roadBanner) roadBanner.classList.remove("has-radar-alert");
 }
 window.dismissApproachingPoliceAlert = dismissApproachingPoliceAlert;
 
@@ -1696,7 +1728,7 @@ function showMiniConvoyGapAlert(rider) {
         type="button" 
         class="mini-alert-btn convoy-gap-alert" 
         onclick="window.expandMiniConvoyGapAlert('${rider.id}')"
-        title="Convoy Gap Alert (${escapeHtml(rider.rider_name)} is ${gapLabel} away) - Tap to Locate"
+        title="Convoy Gap Alert (${escapeHtml(rider.rider_name)} is ${gapLabel} away) - Tap to Open in Bar"
       >
         <i class="fa-solid fa-triangle-exclamation text-xl text-yellow-200"></i>
         <span class="mini-alert-badge badge-gap" id="miniConvoyBadge_${rider.id}">${gapLabel}</span>
@@ -1736,24 +1768,29 @@ function hideMiniConvoyGapAlert(riderId) {
 window.hideMiniConvoyGapAlert = hideMiniConvoyGapAlert;
 
 window.expandMiniConvoyGapAlert = function(riderId) {
-  const rider = allConvoyRiders.get(riderId) || activeStragglerAlert;
-  const alertBanner = document.getElementById("convoyAlertBanner");
+  const rider = (riderId && allConvoyRiders.get(riderId)) || activeStragglerAlert;
+  const alertBanner = document.getElementById("distanceAlertBanner") || document.getElementById("convoyAlertBanner");
   const alertText = document.getElementById("convoyAlertText");
   if (rider) {
     activeStragglerAlert = rider;
     if (alertText) {
-      alertText.textContent = `⚠️ CONVOY ALERT: ${rider.rider_name} is ${rider.distanceToLeader ? rider.distanceToLeader.toFixed(1) : "1.5"} km away from the group!`;
+      alertText.textContent = formatConvoyAlertText(rider);
+      alertText.title = `Convoy Distance Alert: ${rider.rider_name} is ${rider.distanceToLeader ? rider.distanceToLeader.toFixed(1) : "1.5"}km away`;
     }
   }
   if (alertBanner) {
     alertBanner.classList.remove("hidden");
+    const roadBanner = document.getElementById("currentRoadBanner");
+    if (roadBanner) roadBanner.classList.add("has-distance-alert");
   }
 };
 
 function minimizeConvoyAlert() {
-  const alertBanner = document.getElementById("convoyAlertBanner");
+  const alertBanner = document.getElementById("distanceAlertBanner") || document.getElementById("convoyAlertBanner");
   if (alertBanner) alertBanner.classList.add("hidden");
-  // Round icon remains docked!
+  const roadBanner = document.getElementById("currentRoadBanner");
+  if (roadBanner) roadBanner.classList.remove("has-distance-alert");
+  // Round icon remains docked in #miniAlertDock!
 }
 window.minimizeConvoyAlert = minimizeConvoyAlert;
 
@@ -1761,10 +1798,13 @@ function dismissConvoyAlert() {
   if (activeStragglerAlert && activeStragglerAlert.id) {
     const rawId = activeStragglerAlert.id;
     markAlertAsDismissed(`convoy_gap_${rawId}`);
+    markAlertAsDismissed(rawId);
     hideMiniConvoyGapAlert(rawId);
   }
-  const alertBanner = document.getElementById("convoyAlertBanner");
+  const alertBanner = document.getElementById("distanceAlertBanner") || document.getElementById("convoyAlertBanner");
   if (alertBanner) alertBanner.classList.add("hidden");
+  const roadBanner = document.getElementById("currentRoadBanner");
+  if (roadBanner) roadBanner.classList.remove("has-distance-alert");
 }
 window.dismissConvoyAlert = dismissConvoyAlert;
 
@@ -1788,14 +1828,20 @@ window.dismissMiniAlert = function(type, alertId, event) {
     markAlertAsDismissed(`radar_banner_${rawId}`);
     markAlertAsDismissed(rawId);
     hideMiniRadarAlert(rawId);
-    const banner = document.getElementById("approachingPoliceBanner");
+    hideMiniPoliceAlert(rawId);
+    const banner = document.getElementById("radarAlertBanner") || document.getElementById("approachingPoliceBanner");
     if (banner) banner.classList.add("hidden");
+    const roadBanner = document.getElementById("currentRoadBanner");
+    if (roadBanner) roadBanner.classList.remove("has-radar-alert");
   } else if (type === "convoy_gap") {
     const rawId = alertId.replace("convoy_gap_", "");
     markAlertAsDismissed(`convoy_gap_${rawId}`);
+    markAlertAsDismissed(rawId);
     hideMiniConvoyGapAlert(rawId);
-    const banner = document.getElementById("convoyAlertBanner");
+    const banner = document.getElementById("distanceAlertBanner") || document.getElementById("convoyAlertBanner");
     if (banner) banner.classList.add("hidden");
+    const roadBanner = document.getElementById("currentRoadBanner");
+    if (roadBanner) roadBanner.classList.remove("has-distance-alert");
   }
 };
 
@@ -1907,13 +1953,14 @@ function evaluateConvoyDistances() {
     }
   });
 
-  const alertBanner = document.getElementById("convoyAlertBanner");
+  const alertBanner = document.getElementById("distanceAlertBanner") || document.getElementById("convoyAlertBanner");
   const alertText = document.getElementById("convoyAlertText");
 
   if (maxStraggler) {
     activeStragglerAlert = maxStraggler;
     if (alertText) {
-      alertText.textContent = `⚠️ CONVOY ALERT: ${maxStraggler.rider_name} is ${maxStraggler.distanceToLeader.toFixed(1)} km away from the group!`;
+      alertText.textContent = formatConvoyAlertText(maxStraggler);
+      alertText.title = `Convoy Distance Alert: ${maxStraggler.rider_name} is ${maxStraggler.distanceToLeader ? maxStraggler.distanceToLeader.toFixed(1) : "1.5"}km away`;
     }
 
     const now = Date.now();
@@ -1936,6 +1983,8 @@ function evaluateConvoyDistances() {
   } else {
     activeStragglerAlert = null;
     if (alertBanner) alertBanner.classList.add("hidden");
+    const roadBanner = document.getElementById("currentRoadBanner");
+    if (roadBanner) roadBanner.classList.remove("has-distance-alert");
     hideMiniConvoyGapAlert();
   }
 
@@ -2535,8 +2584,8 @@ function triggerRoadTransitionPopup(newRoadName, newSpeedLimit, newRoadType = "H
   speedLimit = newSpeedLimit;
   currentRoadType = newRoadType;
 
-  const currentRoadBanner = document.getElementById("currentRoadBanner");
-  if (currentRoadBanner) currentRoadBanner.textContent = newRoadName;
+  const roadNameEl = document.getElementById("currentRoadName") || document.getElementById("currentRoadBanner");
+  if (roadNameEl) roadNameEl.textContent = newRoadName;
 
   const speedLimitVal = document.getElementById("speedLimitVal");
   if (speedLimitVal) speedLimitVal.textContent = newSpeedLimit;
@@ -3441,8 +3490,8 @@ function startHighwaySimulation() {
   speedLimit = routeData.speedLimit;
   currentRoadType = routeData.type;
 
-  const currentRoadBanner = document.getElementById("currentRoadBanner");
-  if (currentRoadBanner) currentRoadBanner.textContent = currentRoadName;
+  const roadNameEl = document.getElementById("currentRoadName") || document.getElementById("currentRoadBanner");
+  if (roadNameEl) roadNameEl.textContent = currentRoadName;
   const speedLimitVal = document.getElementById("speedLimitVal");
   if (speedLimitVal) speedLimitVal.textContent = speedLimit;
 
