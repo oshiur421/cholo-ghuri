@@ -347,6 +347,13 @@
           </div>
         </div>
 
+        <!-- Tour Planner Button -->
+        <button id="openTourPlannerBtn" onclick="window.openTourPlanner && window.openTourPlanner()" title="Group Tour & Multi-Stop Waypoint Planner" class="glass-panel-neon hover:border-cyan-400 active:scale-95 rounded-xl sm:rounded-2xl px-2.5 py-1.5 sm:px-3.5 sm:py-2 flex items-center gap-1.5 border border-cyan-500/40 text-slate-200 transition-all shadow-2xl cursor-pointer pointer-events-auto flex-shrink-0 whitespace-nowrap" style="pointer-events: auto !important; position: relative; z-index: 10010; touch-action: manipulation;">
+          <span class="text-xs sm:text-sm">🗺️</span>
+          <span class="font-cyber font-bold text-[10px] sm:text-xs uppercase tracking-wider text-cyan-300">TOUR</span>
+          <span id="activeTourIndicatorDot" class="hidden w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+        </button>
+
         <!-- Group (X) Riders Drawer Button -->
         <button id="topRidersCountBtn" onclick="window.toggleGroupDrawer && window.toggleGroupDrawer()" title="View Group Riders List & Distances" class="group-trigger-btn glass-panel-neon hover:border-emerald-400 active:scale-95 rounded-xl sm:rounded-2xl px-2.5 py-1.5 sm:px-4 sm:py-2 flex items-center gap-1.5 border border-emerald-500/40 text-slate-200 transition-all shadow-2xl cursor-pointer pointer-events-auto flex-shrink-0 whitespace-nowrap" style="pointer-events: auto !important; position: relative; z-index: 10010; touch-action: manipulation;">
           <span class="radar-beacon w-2 h-2 rounded-full bg-neon-green pointer-events-none"></span>
@@ -357,6 +364,84 @@
 
       <!-- Dedicated Sub-Road Alert Section (Directly underneath CURRENT ROAD bar, never overlapping) -->
       <div id="subRoadAlertSection" class="sub-road-alert-section pointer-events-auto">
+        <!-- 0. Live Tour Route Progress Strip -->
+        <div id="tourProgressStrip" class="sub-road-alert-card tour-progress-card hidden">
+          <div class="alert-card-left flex items-center gap-2.5 min-w-0 flex-1">
+            <div class="alert-card-icon alert-card-icon-cyan tour-pulsing-icon">
+              <i class="fa-solid fa-route text-cyan-400"></i>
+            </div>
+            <div class="alert-card-text flex flex-col min-w-0 flex-1">
+              <div class="flex items-center justify-between gap-2">
+                <span id="tourProgressLabel" class="alert-card-label text-cyan-400 font-bold uppercase tracking-wider text-[10px] sm:text-xs truncate">
+                  TOUR: DHAKA ➔ BANDARBAN
+                </span>
+                <span id="tourSubgroupTag" class="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-hud uppercase">
+                  ALL RIDERS
+                </span>
+              </div>
+              <!-- Chain breadcrumb -->
+              <div id="tourChainBreadcrumb" class="font-cyber font-semibold text-[10.5px] sm:text-xs text-slate-200 truncate mt-0.5">
+                Dhaka ➔ 🤝 Cumilla ➔ ⛽ Chattogram ➔ 🏁 Bandarban
+              </div>
+              <!-- Next stoppage highlight with live distance -->
+              <div id="tourNextStopHighlight" class="text-[10px] sm:text-[11px] font-cyber text-emerald-300 font-bold flex items-center gap-1.5 mt-0.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                <span id="tourNextStopText">NEXT: 🤝 Cumilla (Regroup) • 18.4 km</span>
+              </div>
+            </div>
+          </div>
+          <div class="alert-card-actions flex items-center gap-1.5 flex-shrink-0">
+            <button id="viewTourNextStopBtn" type="button" class="sub-alert-btn sub-alert-btn-action sub-alert-btn-cyan" title="Pan to Next Tour Stop">
+              <i class="fa-solid fa-location-crosshairs text-[10px]"></i>
+              <span>VIEW</span>
+            </button>
+            <button id="openTourPlannerFromStripBtn" type="button" class="sub-alert-btn sub-alert-btn-min" title="Edit Tour Plan">
+              <i class="fa-solid fa-map text-[10px]"></i>
+            </button>
+            <button id="minimizeTourProgressBtn" type="button" class="sub-alert-btn sub-alert-btn-min" title="Minimize Tour Progress">
+              <i class="fa-solid fa-minus text-[10px]"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- 0.1 Tour Arrival & Proximity Alert Card (Within 1.0 km of Regroup / Refuel) -->
+        <div id="tourProximityAlertCard" class="sub-road-alert-card tour-proximity-alert-card hidden">
+          <div class="alert-card-left flex items-center gap-2.5 min-w-0 flex-1">
+            <div id="tourProximityIconBox" class="alert-card-icon alert-card-icon-amber">
+              <span id="tourProximityIcon" class="text-base">🤝</span>
+            </div>
+            <div class="alert-card-text flex flex-col min-w-0 flex-1">
+              <div class="flex items-center gap-2">
+                <span id="tourProximityBadge" class="alert-card-label text-amber-400 font-bold uppercase tracking-wider text-[10px] sm:text-xs">
+                  REGROUP POINT AHEAD
+                </span>
+                <span id="tourProximityDistanceBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-hud">
+                  450m
+                </span>
+              </div>
+              <span id="tourProximityText" class="alert-card-desc font-cyber font-bold text-xs sm:text-sm text-slate-100 truncate">
+                🤝 REGROUP POINT: Cumilla (2/3 Riders Arrived)
+              </span>
+            </div>
+          </div>
+          <div class="alert-card-actions flex items-center gap-1.5 flex-shrink-0">
+            <button id="locateTourStopBtn" type="button" class="sub-alert-btn sub-alert-btn-action sub-alert-btn-amber" title="Locate Waypoint">
+              <i class="fa-solid fa-location-crosshairs text-[10px]"></i>
+              <span>LOCATE</span>
+            </button>
+            <button id="markTourStopDoneBtn" type="button" class="sub-alert-btn sub-alert-btn-action sub-alert-btn-emerald" title="Mark Stoppage Reached & Proceed">
+              <i class="fa-solid fa-check text-[10px]"></i>
+              <span>MARK DONE</span>
+            </button>
+            <button id="minimizeTourAlertBtn" type="button" class="sub-alert-btn sub-alert-btn-min" title="Minimize Alert to Dock">
+              <i class="fa-solid fa-minus text-[10px]"></i>
+            </button>
+            <button id="dismissTourAlertBtn" type="button" class="sub-alert-btn sub-alert-btn-close" title="Dismiss Proximity Alert">
+              <i class="fa-solid fa-xmark text-xs"></i>
+            </button>
+          </div>
+        </div>
+
         <!-- 1. Convoy Distance Gap Alert Card -->
         <div id="distanceAlertBanner" data-alias="convoyAlertBanner stragglerAlertBanner" class="sub-road-alert-card convoy-alert-card hidden">
           <div class="alert-card-left flex items-center gap-2.5 min-w-0">
@@ -898,6 +983,221 @@
           Dismiss / Close
         </button>
       </div>
+    </div>
+  </div>
+
+  <!-- ==================== MAP PICKING BANNER OVERLAY ==================== -->
+  <div id="mapPickBanner" class="fixed top-4 left-1/2 -translate-x-1/2 z-[15000] hidden flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-slate-900/95 border-2 border-cyan-400 text-slate-100 shadow-[0_0_30px_rgba(0,240,255,0.4)] backdrop-blur-md">
+    <div class="w-7 h-7 rounded-lg bg-cyan-500/20 flex items-center justify-center text-cyan-400 animate-pulse text-sm">
+      <i class="fa-solid fa-location-crosshairs"></i>
+    </div>
+    <div class="flex flex-col">
+      <span class="text-xs font-cyber font-bold text-cyan-300 uppercase tracking-wider">TAP ON MAP TO PICK LOCATION</span>
+      <span id="mapPickSubtitle" class="text-[10px] text-slate-400">Selecting waypoint coordinates...</span>
+    </div>
+    <button id="cancelMapPickBtn" type="button" onclick="window.cancelMapPick && window.cancelMapPick()" class="ml-2 px-3 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-cyber font-bold border border-slate-700 transition-colors cursor-pointer">
+      Cancel
+    </button>
+  </div>
+
+  <!-- ==================== GROUP TOUR & MULTI-STOP WAYPOINT PLANNER MODAL ==================== -->
+  <div id="tourPlannerModal" style="position: fixed; inset: 0; z-index: 10000;" class="fixed inset-0 z-[10000] flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-xl hidden opacity-0 pointer-events-none transition-all duration-300">
+    <div class="glass-panel-neon w-full max-w-2xl max-h-[92vh] flex flex-col rounded-3xl border border-cyan-500/40 shadow-[0_0_60px_rgba(0,0,0,0.95)] overflow-hidden relative">
+      
+      <!-- Close Button -->
+      <button type="button" id="closeTourPlannerModalBtn" onclick="window.closeTourPlanner && window.closeTourPlanner()" title="Close Tour Planner" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors z-20 cursor-pointer">
+        <i class="fa-solid fa-xmark text-sm"></i>
+      </button>
+
+      <!-- Ambient Glows -->
+      <div class="absolute -top-20 -left-20 w-44 h-44 bg-cyan-500/20 rounded-full blur-3xl pointer-events-none"></div>
+      <div class="absolute -bottom-20 -right-20 w-44 h-44 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none"></div>
+
+      <!-- Modal Header -->
+      <div class="p-4 sm:p-5 border-b border-cyan-500/20 flex items-center gap-3 relative z-10 flex-shrink-0">
+        <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-cyan-500/15 border border-cyan-400 flex items-center justify-center text-cyan-400 text-lg shadow-[0_0_20px_rgba(0,240,255,0.3)]">
+          <i class="fa-solid fa-route"></i>
+        </div>
+        <div class="flex flex-col min-w-0 pr-8">
+          <h2 class="font-cyber font-black text-base sm:text-lg text-slate-100 tracking-wider uppercase truncate">
+            GROUP TOUR & WAYPOINT PLANNER
+          </h2>
+          <p class="font-cyber font-semibold text-[10px] sm:text-xs text-cyan-300 uppercase tracking-widest truncate">
+            Multi-Stop Route • Regroup & Refuel Points • Subgroups
+          </p>
+        </div>
+      </div>
+
+      <!-- Modal Body (Scrollable) -->
+      <div class="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 custom-scrollbar relative z-10">
+        
+        <!-- Section 1: Tour Name & Subgroup Selector -->
+        <div class="bg-slate-900/80 border border-slate-800/90 rounded-2xl p-3.5 sm:p-4 space-y-3 shadow-inner">
+          <div class="flex flex-col gap-1.5">
+            <label class="text-[10.5px] font-cyber font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+              <i class="fa-solid fa-pen-nib text-cyan-400"></i> Tour / Subgroup Name
+            </label>
+            <input 
+              type="text" 
+              id="tourPlanNameInput" 
+              placeholder="e.g. Dhaka -> Bandarban (Alpha Squad)"
+              class="w-full bg-slate-950/90 border border-slate-700 focus:border-cyan-400 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-cyber text-slate-100 placeholder-slate-500 outline-none transition-colors shadow-inner"
+            >
+          </div>
+
+          <!-- Subgroup Selection & Filtering -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <div class="flex flex-col gap-1.5">
+              <label class="text-[10.5px] font-cyber font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                <i class="fa-solid fa-people-group text-emerald-400"></i> Target Subgroup
+              </label>
+              <select 
+                id="tourSubgroupSelect" 
+                class="w-full bg-slate-950/90 border border-slate-700 focus:border-emerald-400 rounded-xl px-3 py-2 text-xs font-cyber text-slate-200 outline-none transition-colors cursor-pointer"
+              >
+                <option value="All Riders">🌐 All Riders (Full Convoy)</option>
+                <option value="Alpha Squad">⚡ Alpha Squad</option>
+                <option value="Tour Group A">🏍️ Tour Group A</option>
+                <option value="Tour Group B">🏍️ Tour Group B</option>
+                <option value="Fast Squad">🔥 Fast Squad</option>
+                <option value="Cruisers">⚓ Cruisers</option>
+                <option value="__custom__">➕ Create New Subgroup...</option>
+              </select>
+              <input 
+                type="text" 
+                id="tourSubgroupCustomInput" 
+                placeholder="Type custom subgroup name..." 
+                class="hidden w-full mt-1 bg-slate-950 border border-emerald-500/50 rounded-lg px-2.5 py-1.5 text-xs font-cyber text-emerald-300 outline-none"
+              >
+            </div>
+
+            <!-- Current Rider Subgroup Tag & Alignment -->
+            <div class="flex flex-col justify-between p-2.5 rounded-xl bg-slate-950/60 border border-slate-800">
+              <div class="flex items-center justify-between text-[10px]">
+                <span class="text-slate-400 font-cyber">YOUR ACTIVE SUBGROUP:</span>
+                <span id="currentRiderSubgroupBadge" class="font-hud font-bold text-cyan-300 px-2 py-0.5 rounded bg-cyan-950/60 border border-cyan-800">
+                  ALL RIDERS
+                </span>
+              </div>
+              <div class="flex items-center gap-2 mt-2">
+                <button 
+                  type="button" 
+                  id="setMySubgroupBtn" 
+                  title="Switch your rider profile to the selected subgroup"
+                  class="flex-1 py-1.5 px-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 active:scale-95 text-neon-green border border-emerald-500/40 text-[10px] font-cyber font-bold uppercase transition-all cursor-pointer flex items-center justify-center gap-1"
+                >
+                  <i class="fa-solid fa-right-left text-[9px]"></i>
+                  <span>Switch to This Subgroup</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: Quick Bangladesh Highway Waypoint Presets -->
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-cyber font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+              <i class="fa-solid fa-bolt text-amber-400"></i> Quick Presets (Tap to Add Waypoint)
+            </span>
+            <span class="text-[9px] text-slate-500">Major Highway Stops</span>
+          </div>
+          <div id="tourPresetsContainer" class="flex flex-wrap gap-1.5">
+            <button type="button" class="preset-chip" data-name="Dhaka (Zero Point)" data-lat="23.7289" data-lng="90.4105" data-type="start">+ Dhaka</button>
+            <button type="button" class="preset-chip" data-name="Mawa Toll Plaza (Padma)" data-lat="23.4792" data-lng="90.2863" data-type="regroup">+ Mawa</button>
+            <button type="button" class="preset-chip" data-name="Cumilla (Highway Inn)" data-lat="23.4607" data-lng="91.1809" data-type="regroup">+ Cumilla</button>
+            <button type="button" class="preset-chip" data-name="Chattogram (City Gate)" data-lat="22.3850" data-lng="91.7760" data-type="refuel">+ Chattogram</button>
+            <button type="button" class="preset-chip" data-name="Bandarban (Hill View)" data-lat="22.1953" data-lng="92.2184" data-type="dest">+ Bandarban</button>
+            <button type="button" class="preset-chip" data-name="Cox's Bazar (Kolatoli)" data-lat="21.4272" data-lng="91.9800" data-type="dest">+ Cox's Bazar</button>
+            <button type="button" class="preset-chip" data-name="Sylhet (Keane Bridge)" data-lat="24.8949" data-lng="91.8687" data-type="dest">+ Sylhet</button>
+            <button type="button" class="preset-chip" data-name="Bogura (Banani)" data-lat="24.8465" data-lng="89.3777" data-type="regroup">+ Bogura</button>
+          </div>
+        </div>
+
+        <!-- Section 3: Waypoint Builder List (Point A, B, C, D...) -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="text-[11px] font-cyber font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+              <i class="fa-solid fa-map-pin text-rose-400"></i> Route Waypoint Chain
+            </label>
+            <span id="waypointCountBadge" class="text-[10px] font-hud text-cyan-400 bg-cyan-950/60 px-2 py-0.5 rounded-full border border-cyan-800">
+              0 STOPS
+            </span>
+          </div>
+
+          <!-- Dynamic Waypoint Rows Container -->
+          <div id="waypointListContainer" class="space-y-2.5">
+            <!-- Dynamically populated rows inserted by JS -->
+          </div>
+
+          <!-- Builder Controls (Add, Use Current GPS, Clear) -->
+          <div class="flex flex-wrap items-center gap-2 pt-2">
+            <button 
+              type="button" 
+              id="addWaypointBtn" 
+              class="flex-1 min-w-[150px] py-2 px-3 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 active:scale-95 text-cyan-300 border border-cyan-500/40 font-cyber font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all shadow cursor-pointer"
+            >
+              <i class="fa-solid fa-plus text-xs"></i>
+              <span>+ Add Stoppage (Point B, C...)</span>
+            </button>
+            <button 
+              type="button" 
+              id="useCurrentGpsAsStartBtn" 
+              title="Set your current GPS coordinates as Point A Start"
+              class="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-emerald-400 border border-emerald-500/30 font-cyber font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <i class="fa-solid fa-crosshairs text-xs"></i>
+              <span>My GPS as Start</span>
+            </button>
+            <button 
+              type="button" 
+              id="clearTourPlanBtn" 
+              title="Clear all waypoints"
+              class="py-2 px-3 rounded-xl bg-slate-800 hover:bg-red-950/40 active:scale-95 text-slate-400 hover:text-red-400 border border-slate-700 hover:border-red-500/40 font-cyber font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
+            >
+              <i class="fa-solid fa-trash-can text-xs"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Section 4: Live Tour Route Distance & Time Estimate Summary -->
+        <div id="tourPlanSummaryBox" class="p-3 rounded-xl bg-slate-900/90 border border-cyan-500/30 flex items-center justify-between text-xs font-cyber">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-road text-cyan-400"></i>
+            <span id="tourSummaryDistance" class="text-slate-200 font-bold">Total: ~0.0 km</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-clock text-amber-400"></i>
+            <span id="tourSummaryDuration" class="text-slate-200 font-bold">Est: ~0h 00m</span>
+          </div>
+          <div class="flex items-center gap-1.5 text-emerald-400 font-semibold">
+            <i class="fa-solid fa-satellite-dish text-[10px]"></i>
+            <span id="tourSyncEngineLabel">OSRM + Dual Sync</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer Action Bar -->
+      <div class="p-3.5 sm:p-4 border-t border-cyan-500/20 bg-slate-950/80 flex items-center justify-between gap-3 relative z-10 flex-shrink-0">
+        <button 
+          type="button" 
+          id="closeTourPlannerFooterBtn" 
+          onclick="window.closeTourPlanner && window.closeTourPlanner()" 
+          class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-cyber font-bold text-xs uppercase border border-slate-700 cursor-pointer transition-colors"
+        >
+          Cancel
+        </button>
+        <button 
+          type="button" 
+          id="activateTourPlanBtn" 
+          class="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-cyan-600 to-emerald-600 hover:from-cyan-500 hover:to-emerald-500 text-white font-cyber font-bold text-xs sm:text-sm uppercase tracking-wider shadow-lg shadow-cyan-600/30 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2"
+        >
+          <i class="fa-solid fa-paper-plane text-xs"></i>
+          <span>🚀 ACTIVATE & BROADCAST TOUR</span>
+        </button>
+      </div>
+
     </div>
   </div>
 

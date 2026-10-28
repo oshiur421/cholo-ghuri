@@ -171,7 +171,8 @@ window.submitOnboarding = async function(event) {
     riderId,
     riderName: name,
     roomCode: code,
-    isLeader: finalIsLeader
+    isLeader: finalIsLeader,
+    subgroup: (currentSession && currentSession.subgroup) || "All Riders"
   };
 
   if (typeof currentSession !== "undefined") {
@@ -537,7 +538,8 @@ let currentSession = {
   riderId: null,
   riderName: "",
   roomCode: "",
-  isLeader: false
+  isLeader: false,
+  subgroup: "All Riders"
 };
 
 // Live Rider Telemetry (Default: Dhaka Highway Core)
@@ -2006,6 +2008,10 @@ function evaluateConvoyDistances() {
 
   renderGroupRidersList(leaderRider);
   updateRidersCount();
+
+  if (typeof evaluateTourProgress === "function") {
+    evaluateTourProgress();
+  }
 }
 
 function renderGroupRidersList(leader) {
@@ -2917,6 +2923,11 @@ async function runDualSyncLoop() {
     await fetchRecentVoiceMessages();
   }
 
+  // 5. Direct REST: Poll and sync active tour plan for this room_code (public.tour_plans)
+  if (typeof fetchActiveTourPlanFromRest === "function") {
+    await fetchActiveTourPlanFromRest();
+  }
+
   // Update Top HUD DB Sync indicator dot
   if (hasError) {
     updateSyncStatusUI(false, firstErrorMessage);
@@ -3104,6 +3115,11 @@ function joinSupabaseRoom(roomCode) {
           if (payload) {
             addOrUpdatePoliceMarker(payload);
             evaluatePoliceProximity();
+          }
+        })
+        .on("broadcast", { event: "tour_plan_update" }, ({ payload }) => {
+          if (payload && typeof handleIncomingTourPlan === "function") {
+            handleIncomingTourPlan(payload, false);
           }
         })
         .on("broadcast", { event: "voice_ptt" }, ({ payload }) => {
@@ -3746,6 +3762,9 @@ function loadSavedSession() {
         parsed.roomCode = parsed.roomCode.trim().toUpperCase();
         if (!parsed.riderId) {
           parsed.riderId = generateUUID();
+        }
+        if (!parsed.subgroup) {
+          parsed.subgroup = "All Riders";
         }
         currentSession = parsed;
         return true;
@@ -4811,6 +4830,1282 @@ if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", initPttCommunicator);
 } else {
   initPttCommunicator();
+}
+
+// ==========================================
+// 15. GROUP TOUR & MULTI-STOP WAYPOINT PLANNER
+// (Subgroups, Stoppages Point A-B-C, Regrouping & Refueling Points, OSRM Routing & Dual-Engine Sync)
+// ==========================================
+
+let activeTourPlan = null;
+let tourBuilderWaypoints = [];
+let tourRouteLayerGroup = null;
+let tourRoutePolyline = null;
+let tourRouteGlowPolyline = null;
+let tourWaypointMarkers = [];
+let isPickingLocationOnMap = false;
+let pickingWaypointIndex = -1;
+let isTourProgressMinimized = false;
+let activeProximityStopId = null;
+let lastProximityChimeTime = 0;
+let nominatimSearchDebounceTimer = null;
+
+// Major Bangladeshi Highway Tour Presets
+const BANGLADESH_PRESETS = [
+  { name: "Dhaka (Zero Point)", lat: 23.7289, lng: 90.4105, type: "start" },
+  { name: "Mawa Toll Plaza (Padma)", lat: 23.4792, lng: 90.2863, type: "regroup" },
+  { name: "Cumilla (Highway Inn)", lat: 23.4607, lng: 91.1809, type: "regroup" },
+  { name: "Chattogram (City Gate)", lat: 22.3850, lng: 91.7760, type: "refuel" },
+  { name: "Bandarban (Hill View)", lat: 22.1953, lng: 92.2184, type: "dest" },
+  { name: "Cox's Bazar (Kolatoli)", lat: 21.4272, lng: 91.9800, type: "dest" },
+  { name: "Sylhet (Keane Bridge)", lat: 24.8949, lng: 91.8687, type: "dest" },
+  { name: "Bogura (Banani)", lat: 24.8465, lng: 89.3777, type: "regroup" }
+];
+
+function getStopTypeIcon(type) {
+  switch (type) {
+    case "start": return "🟢";
+    case "regroup": return "🤝";
+    case "refuel": return "⛽";
+    case "rest": return "☕";
+    case "dest": return "🏁";
+    default: return "📍";
+  }
+}
+
+function getStopTypeLabel(type) {
+  switch (type) {
+    case "start": return "Start";
+    case "regroup": return "Regroup";
+    case "refuel": return "Refuel";
+    case "rest": return "Rest Stop";
+    case "dest": return "Destination";
+    default: return "Stop";
+  }
+}
+
+function createWaypointDivIcon(type, name, index, total) {
+  let badgeThemeClass = "tour-marker-dest";
+  let iconHtml = "🏁";
+  let typeLabel = "🏁 DEST";
+
+  switch (type) {
+    case "start":
+      badgeThemeClass = "tour-marker-start";
+      iconHtml = '<i class="fa-solid fa-play text-emerald-300 text-xs"></i>';
+      typeLabel = "🟢 START";
+      break;
+    case "regroup":
+      badgeThemeClass = "tour-marker-regroup";
+      iconHtml = "🤝";
+      typeLabel = "🤝 REGROUP";
+      break;
+    case "refuel":
+      badgeThemeClass = "tour-marker-refuel";
+      iconHtml = "⛽";
+      typeLabel = "⛽ REFUEL";
+      break;
+    case "rest":
+      badgeThemeClass = "tour-marker-rest";
+      iconHtml = "☕";
+      typeLabel = "☕ REST";
+      break;
+    case "dest":
+    default:
+      badgeThemeClass = "tour-marker-dest";
+      iconHtml = "🏁";
+      typeLabel = "🏁 END";
+      break;
+  }
+
+  const letter = String.fromCharCode(65 + index); // Point A, B, C...
+  const displayName = name || `Point ${letter}`;
+
+  return L.divIcon({
+    className: "custom-tour-waypoint-icon",
+    html: `
+      <div class="tour-waypoint-marker-wrap ${badgeThemeClass}" data-waypoint-index="${index}">
+        <div class="tour-waypoint-badge">
+          <span class="tour-waypoint-icon">${iconHtml}</span>
+          <span class="tour-waypoint-num">${letter}</span>
+        </div>
+        <div class="tour-waypoint-pin"></div>
+        <div class="tour-waypoint-label">
+          <span class="tour-waypoint-type">${typeLabel}</span>
+          <span class="tour-waypoint-name">${escapeHtml(displayName)}</span>
+        </div>
+      </div>
+    `,
+    iconSize: [40, 48],
+    iconAnchor: [20, 48],
+    popupAnchor: [0, -48]
+  });
+}
+
+// OSRM Road Routing Engine with Fallback
+async function fetchOSRMRoute(waypoints) {
+  if (!waypoints || waypoints.length < 2) {
+    return { success: false, error: "Need at least 2 waypoints" };
+  }
+  const coordsStr = waypoints.map(w => `${w.lng.toFixed(5)},${w.lat.toFixed(5)}`).join(";");
+  const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${coordsStr}?overview=full&geometries=geojson`;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 7000);
+    const res = await fetch(osrmUrl, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!res.ok) throw new Error(`OSRM HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.code === "Ok" && data.routes && data.routes[0]) {
+      const route = data.routes[0];
+      const coords = route.geometry.coordinates.map(c => [c[1], c[0]]); // [lat, lng]
+      return {
+        success: true,
+        coordinates: coords,
+        distanceKm: (route.distance || 0) / 1000,
+        durationMins: (route.duration || 0) / 60
+      };
+    }
+    throw new Error(data.code || "No route found");
+  } catch (err) {
+    console.debug("[OSRM Route fetch notice - falling back to direct dashed line]", err);
+    const fallbackCoords = waypoints.map(w => [w.lat, w.lng]);
+    let straightDistKm = 0;
+    for (let i = 0; i < waypoints.length - 1; i++) {
+      straightDistKm += calculateDistanceKm(waypoints[i].lat, waypoints[i].lng, waypoints[i + 1].lat, waypoints[i + 1].lng);
+    }
+    return {
+      success: false,
+      fallback: true,
+      coordinates: fallbackCoords,
+      distanceKm: straightDistKm,
+      durationMins: straightDistKm * 1.5 // approximate 40 km/h cruising
+    };
+  }
+}
+
+// Live Leaflet Map Rendering: Custom Waypoint Markers & Road Polyline
+async function renderTourOnMap(tourPlan, fitBounds = false) {
+  const currentMap = window.map || (typeof map !== "undefined" ? map : null);
+  if (!currentMap) return;
+
+  if (!tourRouteLayerGroup) {
+    tourRouteLayerGroup = L.layerGroup().addTo(currentMap);
+  } else {
+    tourRouteLayerGroup.clearLayers();
+  }
+  tourWaypointMarkers = [];
+
+  if (!tourPlan || !Array.isArray(tourPlan.waypoints) || tourPlan.waypoints.length === 0) {
+    return;
+  }
+
+  // 1. Render Waypoint Markers
+  tourPlan.waypoints.forEach((wp, idx) => {
+    if (!wp.lat || !wp.lng) return;
+    const icon = createWaypointDivIcon(wp.type, wp.name, idx, tourPlan.waypoints.length);
+    const marker = L.marker([wp.lat, wp.lng], { icon, zIndexOffset: 2500 + idx });
+
+    const distFromUser = calculateDistanceKm(riderLocation.lat, riderLocation.lng, wp.lat, wp.lng);
+    const distText = distFromUser < 1 ? `${Math.round(distFromUser * 1000)}m` : `${distFromUser.toFixed(1)} km`;
+
+    marker.bindPopup(`
+      <div style="font-family: 'Rajdhani', sans-serif; min-width: 170px; padding: 2px;">
+        <div style="font-weight: 800; font-size: 13px; color: #00f0ff; margin-bottom: 2px; text-transform: uppercase;">
+          ${escapeHtml(wp.name)}
+        </div>
+        <div style="font-size: 11px; color: #94a3b8; display: flex; justify-content: space-between; margin-bottom: 6px;">
+          <span>Type: <strong style="color: #cbd5e1;">${getStopTypeLabel(wp.type)}</strong></span>
+          <span>Point ${String.fromCharCode(65 + idx)}</span>
+        </div>
+        <div style="font-size: 11px; color: #34d399; font-weight: 700; margin-bottom: 8px;">
+          📍 ${distText} from your bike
+        </div>
+        <button onclick="window.locateTourWaypoint(${idx})" style="width: 100%; padding: 5px 8px; border-radius: 6px; background: #0284c7; color: white; border: none; font-weight: 700; font-size: 11px; cursor: pointer;">
+          🎯 Pan Camera Here
+        </button>
+      </div>
+    `);
+
+    marker.addTo(tourRouteLayerGroup);
+    tourWaypointMarkers.push(marker);
+  });
+
+  // 2. Fetch OSRM Road Geometry & Draw Complete Neon Polyline
+  if (tourPlan.waypoints.length >= 2) {
+    const routeRes = await fetchOSRMRoute(tourPlan.waypoints);
+    if (routeRes && routeRes.coordinates && routeRes.coordinates.length > 0) {
+      if (!routeRes.fallback) {
+        // Outer cyan glow polyline
+        tourRouteGlowPolyline = L.polyline(routeRes.coordinates, {
+          color: "#00e5ff",
+          weight: 8,
+          opacity: 0.35,
+          lineCap: "round",
+          lineJoin: "round"
+        }).addTo(tourRouteLayerGroup);
+
+        // Inner neon emerald polyline
+        tourRoutePolyline = L.polyline(routeRes.coordinates, {
+          color: "#00ff88",
+          weight: 4.5,
+          opacity: 0.95,
+          lineCap: "round",
+          lineJoin: "round"
+        }).addTo(tourRouteLayerGroup);
+      } else {
+        // Clean dashed neon polyline fallback
+        tourRoutePolyline = L.polyline(routeRes.coordinates, {
+          color: "#00f0ff",
+          weight: 4,
+          opacity: 0.9,
+          dashArray: "8, 12",
+          lineCap: "round"
+        }).addTo(tourRouteLayerGroup);
+      }
+
+      if (fitBounds && tourRoutePolyline) {
+        try {
+          currentMap.fitBounds(tourRoutePolyline.getBounds(), { padding: [60, 60], maxZoom: 15 });
+        } catch (e) {}
+      }
+    }
+  }
+}
+
+// Waypoint Builder List Rendering & Management
+function renderWaypointBuilderList() {
+  const container = document.getElementById("waypointListContainer");
+  const countBadge = document.getElementById("waypointCountBadge");
+  if (!container) return;
+
+  if (countBadge) {
+    countBadge.textContent = `${tourBuilderWaypoints.length} STOPS`;
+  }
+
+  if (tourBuilderWaypoints.length === 0) {
+    container.innerHTML = `
+      <div class="p-6 text-center rounded-xl bg-slate-950/60 border border-dashed border-slate-800 text-slate-500 text-xs font-cyber">
+        <i class="fa-solid fa-route text-2xl text-slate-600 mb-2 block"></i>
+        No waypoints added yet. Tap quick presets above or click "+ Add Stoppage" to start planning!
+      </div>
+    `;
+    updateTourPlanSummaryEstimate();
+    return;
+  }
+
+  container.innerHTML = tourBuilderWaypoints.map((wp, index) => {
+    const letter = String.fromCharCode(65 + index);
+    const isStart = index === 0;
+    const isDest = index === tourBuilderWaypoints.length - 1;
+    const badgeTheme = `badge-${wp.type || 'dest'}`;
+
+    return `
+      <div class="waypoint-item-card is-${wp.type || 'dest'} space-y-2.5" data-index="${index}">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="waypoint-num-badge ${badgeTheme}">${letter}</span>
+            <span class="font-cyber font-bold text-xs uppercase text-slate-200 truncate">
+              Point ${letter} (${getStopTypeLabel(wp.type)})
+            </span>
+          </div>
+
+          <div class="flex items-center gap-1 flex-shrink-0">
+            <button 
+              type="button" 
+              onclick="window.moveWaypoint(${index}, -1)" 
+              ${isStart ? 'disabled' : ''} 
+              class="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-slate-300 hover:text-white flex items-center justify-center text-[10px] cursor-pointer"
+              title="Move Up"
+            >
+              <i class="fa-solid fa-arrow-up"></i>
+            </button>
+            <button 
+              type="button" 
+              onclick="window.moveWaypoint(${index}, 1)" 
+              ${isDest ? 'disabled' : ''} 
+              class="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-slate-300 hover:text-white flex items-center justify-center text-[10px] cursor-pointer"
+              title="Move Down"
+            >
+              <i class="fa-solid fa-arrow-down"></i>
+            </button>
+            <button 
+              type="button" 
+              onclick="window.removeWaypoint(${index})" 
+              class="w-6 h-6 rounded bg-slate-800 hover:bg-rose-900/60 text-slate-400 hover:text-rose-400 flex items-center justify-center text-[10px] cursor-pointer transition-colors"
+              title="Remove Waypoint"
+            >
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Search Input with Live Autocomplete + Pick on Map -->
+        <div class="relative flex items-center gap-1.5">
+          <div class="relative flex-1 min-w-0">
+            <input 
+              type="text" 
+              id="wp_input_${index}" 
+              value="${escapeHtml(wp.name || '')}" 
+              placeholder="Search city, highway, landmark (OSM Nominatim)..."
+              oninput="window.handleWaypointSearchInput(${index}, this.value)"
+              autocomplete="off"
+              class="w-full bg-slate-950/90 border border-slate-700 focus:border-cyan-400 rounded-xl px-3 py-2 text-xs font-cyber text-slate-100 placeholder-slate-500 outline-none transition-colors"
+            >
+            <div id="wp_suggestions_${index}" class="nominatim-suggestions-dropdown hidden"></div>
+          </div>
+
+          <button 
+            type="button" 
+            onclick="window.startPickingLocationOnMap(${index})" 
+            title="Pick exact coordinates directly on map" 
+            class="px-2.5 py-2 rounded-xl bg-slate-800/90 hover:bg-cyan-950/60 text-cyan-300 border border-slate-700 hover:border-cyan-500/50 text-[10.5px] font-cyber font-bold flex items-center gap-1 transition-all flex-shrink-0 cursor-pointer active:scale-95 whitespace-nowrap"
+          >
+            <i class="fa-solid fa-location-crosshairs text-[10px]"></i>
+            <span class="hidden sm:inline">Pick on Map</span>
+          </button>
+        </div>
+
+        <!-- Stop Type Selector & Coordinates Indicator -->
+        <div class="flex items-center justify-between gap-2 text-[10.5px] font-cyber">
+          <div class="flex items-center gap-1.5 flex-1 min-w-0">
+            <label class="text-slate-400 flex-shrink-0">Stop Type:</label>
+            <select 
+              onchange="window.updateWaypointType(${index}, this.value)"
+              class="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200 outline-none flex-1 max-w-[200px] cursor-pointer"
+            >
+              <option value="start" ${wp.type === 'start' ? 'selected' : ''}>🟢 Start Point</option>
+              <option value="regroup" ${wp.type === 'regroup' ? 'selected' : ''}>🤝 Regrouping Point</option>
+              <option value="refuel" ${wp.type === 'refuel' ? 'selected' : ''}>⛽ Refueling Point</option>
+              <option value="rest" ${wp.type === 'rest' ? 'selected' : ''}>☕ Rest / Food Stop</option>
+              <option value="dest" ${wp.type === 'dest' ? 'selected' : ''}>🏁 Destination</option>
+            </select>
+          </div>
+
+          <div class="text-[9.5px] text-slate-400 font-mono flex-shrink-0">
+            ${wp.lat ? `${wp.lat.toFixed(4)}, ${wp.lng.toFixed(4)}` : '<span class="text-amber-400">Coords missing</span>'}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  updateTourPlanSummaryEstimate();
+}
+
+// Updating Route Distance & Duration Estimate
+async function updateTourPlanSummaryEstimate() {
+  const distEl = document.getElementById("tourSummaryDistance");
+  const durEl = document.getElementById("tourSummaryDuration");
+  if (!distEl || !durEl) return;
+
+  if (tourBuilderWaypoints.length < 2) {
+    distEl.textContent = "Total: ~0.0 km";
+    durEl.textContent = "Est: ~0h 00m";
+    return;
+  }
+
+  const res = await fetchOSRMRoute(tourBuilderWaypoints);
+  if (res && res.distanceKm !== undefined) {
+    const km = res.distanceKm;
+    const mins = Math.round(res.durationMins || (km * 1.5));
+    const hours = Math.floor(mins / 60);
+    const remMins = mins % 60;
+
+    distEl.textContent = `Total: ~${km.toFixed(1)} km`;
+    durEl.textContent = `Est: ~${hours}h ${remMins < 10 ? '0' : ''}${remMins}m`;
+  }
+}
+
+// OpenStreetMap Nominatim Live Autocomplete
+window.handleWaypointSearchInput = function(index, query) {
+  if (nominatimSearchDebounceTimer) clearTimeout(nominatimSearchDebounceTimer);
+  const dropdown = document.getElementById(`wp_suggestions_${index}`);
+  if (!dropdown) return;
+
+  const cleanQuery = (query || "").trim();
+  if (cleanQuery.length < 2) {
+    dropdown.innerHTML = "";
+    dropdown.classList.add("hidden");
+    return;
+  }
+
+  nominatimSearchDebounceTimer = setTimeout(async () => {
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cleanQuery)}&countrycodes=bd&limit=5`;
+      const res = await fetch(url, { headers: { "Accept-Language": "en" } });
+      if (!res.ok) throw new Error("Nominatim error");
+      const results = await res.json();
+
+      if (!Array.isArray(results) || results.length === 0) {
+        dropdown.innerHTML = `<div class="p-2 text-slate-500 text-xs">No matching locations found in Bangladesh</div>`;
+        dropdown.classList.remove("hidden");
+        return;
+      }
+
+      dropdown.innerHTML = results.map((item, rIdx) => `
+        <div 
+          class="nominatim-item" 
+          onclick="window.selectNominatimSuggestion(${index}, ${rIdx})"
+        >
+          <i class="fa-solid fa-location-dot text-cyan-400 text-xs"></i>
+          <span class="truncate">${escapeHtml(item.display_name)}</span>
+        </div>
+      `).join('');
+      dropdown.classList.remove("hidden");
+
+      // Save results in temporary cache for click selection
+      dropdown._resultsCache = results;
+    } catch (err) {
+      console.debug("[Nominatim search notice]", err);
+    }
+  }, 350);
+};
+
+window.selectNominatimSuggestion = function(index, resultIdx) {
+  const dropdown = document.getElementById(`wp_suggestions_${index}`);
+  if (!dropdown || !dropdown._resultsCache) return;
+  const item = dropdown._resultsCache[resultIdx];
+  if (!item) return;
+
+  const lat = parseFloat(item.lat);
+  const lng = parseFloat(item.lon);
+  const shortName = item.display_name.split(",")[0].trim();
+
+  if (tourBuilderWaypoints[index]) {
+    tourBuilderWaypoints[index].name = shortName;
+    tourBuilderWaypoints[index].lat = lat;
+    tourBuilderWaypoints[index].lng = lng;
+  }
+
+  dropdown.classList.add("hidden");
+  dropdown.innerHTML = "";
+  renderWaypointBuilderList();
+};
+
+// "📍 Pick on Map" workflow
+window.startPickingLocationOnMap = function(index) {
+  isPickingLocationOnMap = true;
+  pickingWaypointIndex = index;
+
+  const modal = document.getElementById("tourPlannerModal");
+  if (modal) modal.classList.add("hidden");
+
+  const banner = document.getElementById("mapPickBanner");
+  const subtitle = document.getElementById("mapPickSubtitle");
+  if (subtitle) {
+    const letter = String.fromCharCode(65 + index);
+    subtitle.textContent = `Tap anywhere on the map to set Point ${letter} coordinates...`;
+  }
+  if (banner) banner.classList.remove("hidden");
+
+  const currentMap = window.map || (typeof map !== "undefined" ? map : null);
+  if (currentMap) {
+    currentMap.once("click", onMapLocationPicked);
+  }
+};
+
+window.cancelMapPick = function() {
+  isPickingLocationOnMap = false;
+  pickingWaypointIndex = -1;
+
+  const banner = document.getElementById("mapPickBanner");
+  if (banner) banner.classList.add("hidden");
+
+  const currentMap = window.map || (typeof map !== "undefined" ? map : null);
+  if (currentMap) {
+    currentMap.off("click", onMapLocationPicked);
+  }
+
+  const modal = document.getElementById("tourPlannerModal");
+  if (modal) modal.classList.remove("hidden");
+};
+
+async function onMapLocationPicked(e) {
+  if (!isPickingLocationOnMap || pickingWaypointIndex < 0) return;
+  const lat = e.latlng.lat;
+  const lng = e.latlng.lng;
+  const index = pickingWaypointIndex;
+
+  isPickingLocationOnMap = false;
+  pickingWaypointIndex = -1;
+
+  const banner = document.getElementById("mapPickBanner");
+  if (banner) banner.classList.add("hidden");
+
+  // Attempt reverse geocoding for friendly name
+  let placeName = `Point ${String.fromCharCode(65 + index)}`;
+  try {
+    const revUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
+    const res = await fetch(revUrl, { headers: { "Accept-Language": "en" } });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.display_name) {
+        placeName = data.display_name.split(",")[0].trim();
+      }
+    }
+  } catch (err) {
+    console.debug("[Reverse geocode notice]", err);
+  }
+
+  if (tourBuilderWaypoints[index]) {
+    tourBuilderWaypoints[index].name = placeName;
+    tourBuilderWaypoints[index].lat = lat;
+    tourBuilderWaypoints[index].lng = lng;
+  }
+
+  const modal = document.getElementById("tourPlannerModal");
+  if (modal) modal.classList.remove("hidden");
+
+  renderWaypointBuilderList();
+  showRadarToast("WAYPOINT PICKED", `Set ${placeName} (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+  playSound("click");
+}
+
+// Waypoint reordering, adding & removing
+window.addWaypoint = function(name = "", lat = null, lng = null, type = "regroup") {
+  const index = tourBuilderWaypoints.length;
+  const letter = String.fromCharCode(65 + index);
+
+  let defaultType = type;
+  if (index === 0) defaultType = "start";
+  else if (index >= 1 && defaultType === "start") defaultType = "regroup";
+
+  tourBuilderWaypoints.push({
+    id: "wp_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
+    name: name || `Stoppage Point ${letter}`,
+    lat: lat,
+    lng: lng,
+    type: defaultType,
+    completed: false
+  });
+
+  renderWaypointBuilderList();
+};
+
+window.removeWaypoint = function(index) {
+  if (index >= 0 && index < tourBuilderWaypoints.length) {
+    tourBuilderWaypoints.splice(index, 1);
+    renderWaypointBuilderList();
+  }
+};
+
+window.moveWaypoint = function(index, delta) {
+  const targetIdx = index + delta;
+  if (targetIdx < 0 || targetIdx >= tourBuilderWaypoints.length) return;
+
+  const item = tourBuilderWaypoints.splice(index, 1)[0];
+  tourBuilderWaypoints.splice(targetIdx, 0, item);
+
+  // Auto-align first as start and last as dest if standard
+  if (targetIdx === 0 && item.type === "dest") item.type = "start";
+
+  renderWaypointBuilderList();
+};
+
+window.updateWaypointType = function(index, newType) {
+  if (tourBuilderWaypoints[index]) {
+    tourBuilderWaypoints[index].type = newType;
+    renderWaypointBuilderList();
+  }
+};
+
+// Quick Presets Handler
+function setupPresetChips() {
+  const container = document.getElementById("tourPresetsContainer");
+  if (!container) return;
+
+  const chips = container.querySelectorAll(".preset-chip");
+  chips.forEach(chip => {
+    chip.addEventListener("click", () => {
+      const name = chip.getAttribute("data-name") || "Preset Stop";
+      const lat = parseFloat(chip.getAttribute("data-lat"));
+      const lng = parseFloat(chip.getAttribute("data-lng"));
+      const type = chip.getAttribute("data-type") || "regroup";
+
+      window.addWaypoint(name, lat, lng, type);
+      playSound("click");
+    });
+  });
+}
+
+// Modal Open / Close Handlers
+window.openTourPlanner = function() {
+  const modal = document.getElementById("tourPlannerModal");
+  if (!modal) return;
+
+  modal.classList.remove("hidden", "opacity-0", "pointer-events-none");
+  playSound("click");
+
+  // Sync inputs
+  const nameInput = document.getElementById("tourPlanNameInput");
+  const subgroupSelect = document.getElementById("tourSubgroupSelect");
+  const currentSubgroupBadge = document.getElementById("currentRiderSubgroupBadge");
+
+  const mySubgroup = (currentSession && currentSession.subgroup) || "All Riders";
+  if (currentSubgroupBadge) currentSubgroupBadge.textContent = mySubgroup.toUpperCase();
+
+  if (activeTourPlan) {
+    if (nameInput) nameInput.value = activeTourPlan.name || "";
+    if (subgroupSelect) subgroupSelect.value = activeTourPlan.subgroup || "All Riders";
+    tourBuilderWaypoints = JSON.parse(JSON.stringify(activeTourPlan.waypoints || []));
+  } else {
+    if (nameInput && !nameInput.value) {
+      nameInput.value = `${currentSession.roomCode || "Convoy"} Tour Plan`;
+    }
+    if (tourBuilderWaypoints.length === 0) {
+      // Default initial 2-stop route (Dhaka -> Bandarban)
+      tourBuilderWaypoints = [
+        { id: "wp_1", name: "Dhaka (Zero Point)", lat: 23.7289, lng: 90.4105, type: "start", completed: false },
+        { id: "wp_2", name: "Cumilla (Highway Inn)", lat: 23.4607, lng: 91.1809, type: "regroup", completed: false },
+        { id: "wp_3", name: "Chattogram (City Gate)", lat: 22.3850, lng: 91.7760, type: "refuel", completed: false },
+        { id: "wp_4", name: "Bandarban (Hill View)", lat: 22.1953, lng: 92.2184, type: "dest", completed: false }
+      ];
+    }
+  }
+
+  renderWaypointBuilderList();
+};
+
+window.closeTourPlanner = function() {
+  const modal = document.getElementById("tourPlannerModal");
+  if (modal) {
+    modal.classList.add("hidden", "opacity-0", "pointer-events-none");
+  }
+};
+
+// Subgroup Switcher
+window.switchRiderSubgroup = function() {
+  const subgroupSelect = document.getElementById("tourSubgroupSelect");
+  const subgroupCustomInput = document.getElementById("tourSubgroupCustomInput");
+  let val = subgroupSelect ? subgroupSelect.value : "All Riders";
+  if (val === "__custom__") {
+    val = (subgroupCustomInput && subgroupCustomInput.value.trim()) || "Custom Squad";
+  }
+
+  currentSession.subgroup = val;
+  try {
+    sessionStorage.setItem("cg_rider_subgroup", val);
+    const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      parsed.subgroup = val;
+      sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(parsed));
+    }
+  } catch (e) {}
+
+  const badge = document.getElementById("currentRiderSubgroupBadge");
+  if (badge) badge.textContent = val.toUpperCase();
+
+  showRadarToast("SUBGROUP JOINED", `You are now tracking subgroup: ${val}`);
+  playSound("click");
+  evaluateTourProgress();
+};
+
+// Tour Activation & Dual-Engine Supabase Sync
+async function activateAndBroadcastTourPlan() {
+  if (tourBuilderWaypoints.length < 2) {
+    showRadarToast("INCOMPLETE ROUTE", "Please add at least 2 waypoints (Start & Destination)");
+    playSound("click");
+    return;
+  }
+
+  // Ensure valid coordinates exist on waypoints
+  for (let i = 0; i < tourBuilderWaypoints.length; i++) {
+    const wp = tourBuilderWaypoints[i];
+    if (!wp.lat || !wp.lng) {
+      showRadarToast("MISSING LOCATION", `Point ${String.fromCharCode(65 + i)} is missing coordinates! Pick location on map.`);
+      playSound("click");
+      return;
+    }
+  }
+
+  // Auto-set first as start, last as dest
+  if (tourBuilderWaypoints[0].type !== "start") tourBuilderWaypoints[0].type = "start";
+  if (tourBuilderWaypoints[tourBuilderWaypoints.length - 1].type !== "dest") {
+    tourBuilderWaypoints[tourBuilderWaypoints.length - 1].type = "dest";
+  }
+
+  const nameInput = document.getElementById("tourPlanNameInput");
+  const subgroupSelect = document.getElementById("tourSubgroupSelect");
+  const subgroupCustomInput = document.getElementById("tourSubgroupCustomInput");
+
+  let subgroupVal = (subgroupSelect ? subgroupSelect.value : "All Riders") || "All Riders";
+  if (subgroupVal === "__custom__") {
+    subgroupVal = (subgroupCustomInput && subgroupCustomInput.value.trim()) || "Alpha Squad";
+  }
+
+  const tourName = (nameInput && nameInput.value.trim()) ||
+    `${tourBuilderWaypoints[0].name.split("(")[0].trim()} ➔ ${tourBuilderWaypoints[tourBuilderWaypoints.length - 1].name.split("(")[0].trim()} (${subgroupVal})`;
+
+  const tourPlan = {
+    id: "tour_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6),
+    room_code: (currentSession.roomCode || "DHAKA101").trim().toUpperCase(),
+    subgroup: subgroupVal,
+    name: tourName,
+    creator_id: currentSession.riderId,
+    creator_name: currentSession.riderName || "Ride Leader",
+    waypoints: JSON.parse(JSON.stringify(tourBuilderWaypoints)).map(w => {
+      w.completed = false;
+      return w;
+    }),
+    current_stop_index: 0,
+    status: "active",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+
+  // 1. Set Local Active State & Cache
+  activeTourPlan = tourPlan;
+  try {
+    sessionStorage.setItem("cg_active_tour_plan", JSON.stringify(tourPlan));
+  } catch (e) {}
+
+  // 2. Render on Map & update progress strip
+  await renderTourOnMap(tourPlan, true);
+  evaluateTourProgress();
+
+  // 3. Dual-Engine Engine A: Supabase Realtime Broadcast
+  if (realtimeChannel) {
+    try {
+      realtimeChannel.send({
+        type: "broadcast",
+        event: "tour_plan_update",
+        payload: tourPlan
+      });
+    } catch (bcErr) {
+      console.debug("[tour_plan_update broadcast note]", bcErr);
+    }
+  }
+
+  // 4. Dual-Engine Engine B: Supabase REST table public.tour_plans
+  try {
+    await supabaseRest("tour_plans", "POST", tourPlan);
+  } catch (restErr) {
+    console.debug("[tour_plans REST insert note - graceful fallback]", restErr);
+  }
+
+  showRadarToast("🚀 TOUR PLAN ACTIVATED", `Tour "${tourPlan.name}" active for ${tourPlan.subgroup}!`);
+  playSound("join");
+  window.closeTourPlanner();
+}
+
+// Incoming Tour Plan Handler
+function handleIncomingTourPlan(remotePlan, fromRest = false) {
+  if (!remotePlan || !remotePlan.waypoints || !Array.isArray(remotePlan.waypoints)) return;
+  if (remotePlan.status && remotePlan.status !== "active") return;
+
+  // Subgroup Filtering:
+  const mySubgroup = (currentSession && currentSession.subgroup) || "All Riders";
+  const planSubgroup = remotePlan.subgroup || "All Riders";
+  const isMatch = (planSubgroup === "All Riders" || mySubgroup === "All Riders" || planSubgroup === mySubgroup);
+
+  if (!isMatch) {
+    return; // Plan is destined for another subgroup
+  }
+
+  // Check if newer than local active plan
+  if (activeTourPlan && activeTourPlan.id === remotePlan.id) {
+    const localTime = new Date(activeTourPlan.updated_at || 0).getTime();
+    const remoteTime = new Date(remotePlan.updated_at || 0).getTime();
+    if (remoteTime <= localTime) return; // Already up to date
+  }
+
+  activeTourPlan = remotePlan;
+  try {
+    sessionStorage.setItem("cg_active_tour_plan", JSON.stringify(remotePlan));
+  } catch (e) {}
+
+  renderTourOnMap(activeTourPlan, false);
+  evaluateTourProgress();
+
+  if (!fromRest) {
+    showRadarToast("🗺️ TOUR PLAN UPDATED", `${remotePlan.name} (by ${remotePlan.creator_name || "Leader"})`);
+    playSound("click");
+  }
+}
+
+// REST Polling in runDualSyncLoop()
+async function fetchActiveTourPlanFromRest() {
+  if (!currentSession.roomCode || currentSession.roomCode === "----") return;
+  const cleanRoom = encodeURIComponent(currentSession.roomCode.trim().toUpperCase());
+  try {
+    const plans = await supabaseRest(
+      `tour_plans?room_code=eq.${cleanRoom}&status=eq.active&order=updated_at.desc&limit=1`,
+      "GET"
+    );
+    if (Array.isArray(plans) && plans.length > 0) {
+      handleIncomingTourPlan(plans[0], true);
+    }
+  } catch (err) {
+    // Graceful catch: table may not exist yet in Supabase
+    console.debug("[tour_plans REST fetch notice]", err.message || err);
+  }
+}
+
+// Live Tour Progress Tracker & Arrival Alerts inside #subRoadAlertSection
+function evaluateTourProgress() {
+  const progressStrip = document.getElementById("tourProgressStrip");
+  const proximityCard = document.getElementById("tourProximityAlertCard");
+  const tourIndicatorDot = document.getElementById("activeTourIndicatorDot");
+
+  if (!activeTourPlan || !Array.isArray(activeTourPlan.waypoints) || activeTourPlan.waypoints.length === 0) {
+    if (progressStrip) progressStrip.classList.add("hidden");
+    if (proximityCard) proximityCard.classList.add("hidden");
+    if (tourIndicatorDot) tourIndicatorDot.classList.add("hidden");
+    hideMiniTourProximityAlert();
+    return;
+  }
+
+  // Tour active indicator dot on #openTourPlannerBtn
+  if (tourIndicatorDot) tourIndicatorDot.classList.remove("hidden");
+
+  // Show Tour Progress Strip
+  if (progressStrip && !isTourProgressMinimized) {
+    progressStrip.classList.remove("hidden");
+  }
+
+  const tourLabel = document.getElementById("tourProgressLabel");
+  const subgroupTag = document.getElementById("tourSubgroupTag");
+  const chainBreadcrumb = document.getElementById("tourChainBreadcrumb");
+  const nextStopHighlight = document.getElementById("tourNextStopHighlight");
+  const nextStopText = document.getElementById("tourNextStopText");
+
+  if (tourLabel) tourLabel.textContent = `TOUR: ${activeTourPlan.name.toUpperCase()}`;
+  if (subgroupTag) subgroupTag.textContent = (activeTourPlan.subgroup || "ALL RIDERS").toUpperCase();
+
+  // Find next uncompleted stoppage
+  const waypoints = activeTourPlan.waypoints;
+  let nextStopIndex = activeTourPlan.current_stop_index || 0;
+  while (nextStopIndex < waypoints.length && waypoints[nextStopIndex].completed) {
+    nextStopIndex++;
+  }
+
+  const isTourComplete = nextStopIndex >= waypoints.length;
+
+  // Build Chain Breadcrumb
+  if (chainBreadcrumb) {
+    const breadcrumbHtml = waypoints.map((wp, i) => {
+      let icon = getStopTypeIcon(wp.type);
+      let stepClass = "tour-breadcrumb-step";
+      let check = "";
+
+      if (wp.completed) {
+        stepClass += " completed";
+        check = " ✓";
+      } else if (i === nextStopIndex) {
+        stepClass += " active";
+      } else {
+        stepClass += " upcoming";
+      }
+
+      return `<span class="${stepClass}">${icon} ${escapeHtml(wp.name.split("(")[0].trim())}${check}</span>`;
+    }).join(' <span class="text-slate-500 font-bold">➔</span> ');
+
+    chainBreadcrumb.innerHTML = breadcrumbHtml;
+  }
+
+  if (isTourComplete) {
+    if (nextStopHighlight) nextStopHighlight.innerHTML = `<span class="text-emerald-400 font-bold">🎉 ALL STOPPAGES REACHED! TOUR COMPLETED</span>`;
+    if (proximityCard) proximityCard.classList.add("hidden");
+    hideMiniTourProximityAlert();
+    return;
+  }
+
+  const nextStop = waypoints[nextStopIndex];
+  const distKm = calculateDistanceKm(riderLocation.lat, riderLocation.lng, nextStop.lat, nextStop.lng);
+  const distText = distKm < 1 ? `${Math.round(distKm * 1000)}m` : `${distKm.toFixed(1)} km`;
+
+  if (nextStopText) {
+    nextStopText.textContent = `NEXT: ${getStopTypeIcon(nextStop.type)} ${nextStop.name.split("(")[0].trim()} (${getStopTypeLabel(nextStop.type)}) • ${distText}`;
+  }
+
+  // Automatic Proximity & Regroup Counter Check (within 1.0 km)
+  if (distKm <= 1.0) {
+    // Count arrived squad riders within 1.0 km of this stop
+    let totalSquadRiders = 1;
+    let arrivedRidersCount = 1; // current rider is within 1.0 km
+
+    allConvoyRiders.forEach((r) => {
+      if (r.id !== currentSession.riderId && r.lat && r.lng) {
+        const rSubgroup = r.subgroup || "All Riders";
+        const isSquadRider = (activeTourPlan.subgroup === "All Riders" || rSubgroup === activeTourPlan.subgroup);
+        if (isSquadRider) {
+          totalSquadRiders++;
+          const rDist = calculateDistanceKm(r.lat, r.lng, nextStop.lat, nextStop.lng);
+          if (rDist <= 1.0) {
+            arrivedRidersCount++;
+          }
+        }
+      }
+    });
+
+    const isRegroup = nextStop.type === "regroup";
+    const isRefuel = nextStop.type === "refuel";
+    const proximityBadge = document.getElementById("tourProximityBadge");
+    const proximityDistanceBadge = document.getElementById("tourProximityDistanceBadge");
+    const proximityText = document.getElementById("tourProximityText");
+    const proximityIconBox = document.getElementById("tourProximityIconBox");
+    const proximityIcon = document.getElementById("tourProximityIcon");
+
+    if (proximityBadge) {
+      proximityBadge.textContent = isRegroup ? "REGROUP POINT AHEAD" : (isRefuel ? "REFUEL POINT AHEAD" : "STOPPAGE AHEAD");
+      proximityBadge.className = `alert-card-label ${isRegroup ? 'text-amber-400' : 'text-orange-400'} font-bold uppercase tracking-wider text-[10px] sm:text-xs`;
+    }
+    if (proximityDistanceBadge) {
+      proximityDistanceBadge.textContent = distText;
+    }
+    if (proximityIconBox && proximityIcon) {
+      proximityIconBox.className = `alert-card-icon ${isRegroup ? 'alert-card-icon-amber' : 'alert-card-icon-rose'}`;
+      proximityIcon.textContent = getStopTypeIcon(nextStop.type);
+    }
+    if (proximityText) {
+      if (isRegroup) {
+        proximityText.textContent = `🤝 REGROUP POINT: ${nextStop.name.split("(")[0].trim()} (${arrivedRidersCount}/${totalSquadRiders} Riders Arrived)`;
+      } else if (isRefuel) {
+        proximityText.textContent = `⛽ REFUEL POINT AHEAD: ${nextStop.name.split("(")[0].trim()} (${distText} away)`;
+      } else {
+        proximityText.textContent = `${getStopTypeIcon(nextStop.type)} ${nextStop.name.split("(")[0].trim()} (${distText} away)`;
+      }
+    }
+
+    const alertId = `tour_proximity_${activeTourPlan.id}_${nextStopIndex}`;
+    if (!window.isAlertDismissed(alertId)) {
+      if (proximityCard) proximityCard.classList.remove("hidden");
+      showMiniTourProximityAlert(nextStop, distKm, arrivedRidersCount, totalSquadRiders);
+
+      const now = Date.now();
+      if (activeProximityStopId !== alertId && now - lastProximityChimeTime > 20000) {
+        activeProximityStopId = alertId;
+        lastProximityChimeTime = now;
+        playSound("click");
+      }
+    }
+  } else {
+    if (proximityCard) proximityCard.classList.add("hidden");
+    hideMiniTourProximityAlert();
+    activeProximityStopId = null;
+  }
+}
+
+// Proximity Card & Progress Strip Actions
+window.locateTourWaypoint = function(idx) {
+  if (!activeTourPlan || !activeTourPlan.waypoints || !activeTourPlan.waypoints[idx]) return;
+  const wp = activeTourPlan.waypoints[idx];
+  const currentMap = window.map || (typeof map !== "undefined" ? map : null);
+  if (currentMap && wp.lat && wp.lng) {
+    currentMap.flyTo([wp.lat, wp.lng], 15, { animate: true, duration: 0.8 });
+    showRadarToast("LOCATING STOP", `Panned to Point ${String.fromCharCode(65 + idx)}: ${wp.name}`);
+    playSound("click");
+  }
+};
+
+window.locateTourNextStop = function() {
+  if (!activeTourPlan || !activeTourPlan.waypoints) return;
+  let idx = activeTourPlan.current_stop_index || 0;
+  while (idx < activeTourPlan.waypoints.length && activeTourPlan.waypoints[idx].completed) idx++;
+  if (idx < activeTourPlan.waypoints.length) {
+    window.locateTourWaypoint(idx);
+  }
+};
+
+window.markCurrentTourStopDone = async function() {
+  if (!activeTourPlan || !activeTourPlan.waypoints) return;
+  let idx = activeTourPlan.current_stop_index || 0;
+  while (idx < activeTourPlan.waypoints.length && activeTourPlan.waypoints[idx].completed) idx++;
+  if (idx < activeTourPlan.waypoints.length) {
+    activeTourPlan.waypoints[idx].completed = true;
+    activeTourPlan.current_stop_index = idx + 1;
+    activeTourPlan.updated_at = new Date().toISOString();
+
+    try {
+      sessionStorage.setItem("cg_active_tour_plan", JSON.stringify(activeTourPlan));
+    } catch (e) {}
+
+    // Broadcast updated state to room
+    if (realtimeChannel) {
+      try {
+        realtimeChannel.send({
+          type: "broadcast",
+          event: "tour_plan_update",
+          payload: activeTourPlan
+        });
+      } catch (e) {}
+    }
+    try {
+      await supabaseRest("tour_plans", "POST", activeTourPlan);
+    } catch (e) {}
+
+    showRadarToast("✅ STOP COMPLETED", `Marked ${activeTourPlan.waypoints[idx].name} as completed! Advancing to next stop.`);
+    playSound("click");
+
+    const proximityCard = document.getElementById("tourProximityAlertCard");
+    if (proximityCard) proximityCard.classList.add("hidden");
+    hideMiniTourProximityAlert();
+
+    evaluateTourProgress();
+  }
+};
+
+window.minimizeTourProgressCard = function() {
+  isTourProgressMinimized = true;
+  const progressStrip = document.getElementById("tourProgressStrip");
+  if (progressStrip) progressStrip.classList.add("hidden");
+  updateMiniAlertDockPosition();
+};
+
+window.minimizeTourProximityAlert = function() {
+  const card = document.getElementById("tourProximityAlertCard");
+  if (card) card.classList.add("hidden");
+  updateMiniAlertDockPosition();
+};
+
+window.dismissTourProximityAlert = function() {
+  if (activeTourPlan) {
+    let idx = activeTourPlan.current_stop_index || 0;
+    while (idx < activeTourPlan.waypoints.length && activeTourPlan.waypoints[idx].completed) idx++;
+    const alertId = `tour_proximity_${activeTourPlan.id}_${idx}`;
+    if (typeof markAlertAsDismissed === "function") {
+      markAlertAsDismissed(alertId);
+    }
+  }
+  const card = document.getElementById("tourProximityAlertCard");
+  if (card) card.classList.add("hidden");
+  hideMiniTourProximityAlert();
+};
+
+window.expandTourProximityCard = function() {
+  const card = document.getElementById("tourProximityAlertCard");
+  if (card) card.classList.remove("hidden");
+  updateMiniAlertDockPosition();
+};
+
+// Mini Alert Dock Tour Proximity Round Icon
+function showMiniTourProximityAlert(stop, distKm, arrived, total) {
+  const dock = document.getElementById("miniAlertDock");
+  if (!dock) return;
+
+  const itemId = `miniAlertItem_tour_proximity`;
+  let item = document.getElementById(itemId);
+
+  const iconEmoji = getStopTypeIcon(stop.type);
+  const badgeTheme = stop.type === "regroup" ? "tour-dock-regroup" : "tour-dock-refuel";
+  const distText = distKm < 1 ? `${Math.round(distKm * 1000)}m` : `${distKm.toFixed(1)}k`;
+
+  if (!item) {
+    item = document.createElement("div");
+    item.id = itemId;
+    item.className = "mini-alert-item mini-alert-popin";
+    item.innerHTML = `
+      <button 
+        type="button" 
+        class="tour-dock-btn ${badgeTheme}" 
+        onclick="window.expandTourProximityCard()" 
+        title="Tap to view Tour Stoppage Alert"
+      >
+        <span class="text-base">${iconEmoji}</span>
+        <span class="text-[8.5px] font-hud font-bold text-amber-300 mt-0.5 leading-none">${distText}</span>
+      </button>
+      <button 
+        type="button" 
+        class="mini-alert-close-btn" 
+        onclick="event.stopPropagation(); window.dismissTourProximityAlert();" 
+        title="Dismiss Alert"
+      >
+        ✕
+      </button>
+    `;
+    dock.appendChild(item);
+  } else {
+    const btn = item.querySelector(".tour-dock-btn");
+    if (btn) {
+      btn.className = `tour-dock-btn ${badgeTheme}`;
+      btn.innerHTML = `
+        <span class="text-base">${iconEmoji}</span>
+        <span class="text-[8.5px] font-hud font-bold text-amber-300 mt-0.5 leading-none">${distText}</span>
+      `;
+    }
+  }
+
+  updateMiniAlertDockPosition();
+}
+
+function hideMiniTourProximityAlert() {
+  const item = document.getElementById("miniAlertItem_tour_proximity");
+  if (item && item.parentNode) {
+    item.classList.add("mini-alert-popout");
+    setTimeout(() => {
+      if (item && item.parentNode) item.parentNode.removeChild(item);
+      updateMiniAlertDockPosition();
+    }, 200);
+  }
+}
+
+// Master Initializer for Tour Planner
+function initTourPlanner() {
+  // 1. Setup Preset Chips
+  setupPresetChips();
+
+  // 2. Open Tour Planner Button
+  const openTourBtn = document.getElementById("openTourPlannerBtn");
+  if (openTourBtn) {
+    openTourBtn.addEventListener("click", () => {
+      window.openTourPlanner();
+    });
+  }
+
+  // 3. Subgroup Select Change
+  const subgroupSelect = document.getElementById("tourSubgroupSelect");
+  const customSubgroupInput = document.getElementById("tourSubgroupCustomInput");
+  if (subgroupSelect) {
+    subgroupSelect.addEventListener("change", (e) => {
+      if (e.target.value === "__custom__") {
+        if (customSubgroupInput) {
+          customSubgroupInput.classList.remove("hidden");
+          customSubgroupInput.focus();
+        }
+      } else {
+        if (customSubgroupInput) customSubgroupInput.classList.add("hidden");
+      }
+    });
+  }
+
+  // 4. Switch Subgroup Button
+  const setSubgroupBtn = document.getElementById("setMySubgroupBtn");
+  if (setSubgroupBtn) {
+    setSubgroupBtn.addEventListener("click", () => {
+      window.switchRiderSubgroup();
+    });
+  }
+
+  // 5. Add Waypoint Button
+  const addWpBtn = document.getElementById("addWaypointBtn");
+  if (addWpBtn) {
+    addWpBtn.addEventListener("click", () => {
+      window.addWaypoint();
+      playSound("click");
+    });
+  }
+
+  // 6. Use My GPS as Start Button
+  const gpsStartBtn = document.getElementById("useCurrentGpsAsStartBtn");
+  if (gpsStartBtn) {
+    gpsStartBtn.addEventListener("click", () => {
+      const lat = riderLocation.lat;
+      const lng = riderLocation.lng;
+      if (tourBuilderWaypoints.length > 0) {
+        tourBuilderWaypoints[0].name = "My Location (Start)";
+        tourBuilderWaypoints[0].lat = lat;
+        tourBuilderWaypoints[0].lng = lng;
+        tourBuilderWaypoints[0].type = "start";
+      } else {
+        tourBuilderWaypoints.unshift({
+          id: "wp_start_" + Date.now(),
+          name: "My Location (Start)",
+          lat: lat,
+          lng: lng,
+          type: "start",
+          completed: false
+        });
+      }
+      renderWaypointBuilderList();
+      showRadarToast("START SET", "Current GPS coordinates set as Point A Start!");
+      playSound("click");
+    });
+  }
+
+  // 7. Clear Tour Plan Button
+  const clearBtn = document.getElementById("clearTourPlanBtn");
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+      tourBuilderWaypoints = [];
+      renderWaypointBuilderList();
+      playSound("click");
+    });
+  }
+
+  // 8. Activate & Broadcast Tour Plan Button
+  const activateBtn = document.getElementById("activateTourPlanBtn");
+  if (activateBtn) {
+    activateBtn.addEventListener("click", () => {
+      activateAndBroadcastTourPlan();
+    });
+  }
+
+  // 9. Tour Progress Strip Buttons
+  const viewNextStopBtn = document.getElementById("viewTourNextStopBtn");
+  if (viewNextStopBtn) {
+    viewNextStopBtn.addEventListener("click", () => {
+      window.locateTourNextStop();
+    });
+  }
+
+  const openFromStripBtn = document.getElementById("openTourPlannerFromStripBtn");
+  if (openFromStripBtn) {
+    openFromStripBtn.addEventListener("click", () => {
+      window.openTourPlanner();
+    });
+  }
+
+  const minProgressBtn = document.getElementById("minimizeTourProgressBtn");
+  if (minProgressBtn) {
+    minProgressBtn.addEventListener("click", () => {
+      window.minimizeTourProgressCard();
+    });
+  }
+
+  // 10. Proximity Alert Card Buttons
+  const locateStopBtn = document.getElementById("locateTourStopBtn");
+  if (locateStopBtn) {
+    locateStopBtn.addEventListener("click", () => {
+      window.locateTourNextStop();
+    });
+  }
+
+  const markDoneBtn = document.getElementById("markTourStopDoneBtn");
+  if (markDoneBtn) {
+    markDoneBtn.addEventListener("click", () => {
+      window.markCurrentTourStopDone();
+    });
+  }
+
+  const minTourAlertBtn = document.getElementById("minimizeTourAlertBtn");
+  if (minTourAlertBtn) {
+    minTourAlertBtn.addEventListener("click", () => {
+      window.minimizeTourProximityAlert();
+    });
+  }
+
+  const dismissTourAlertBtn = document.getElementById("dismissTourAlertBtn");
+  if (dismissTourAlertBtn) {
+    dismissTourAlertBtn.addEventListener("click", () => {
+      window.dismissTourProximityAlert();
+    });
+  }
+
+  // 11. Restore cached tour plan if present in sessionStorage
+  try {
+    const raw = sessionStorage.getItem("cg_active_tour_plan");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.waypoints) && parsed.waypoints.length > 0) {
+        activeTourPlan = parsed;
+        setTimeout(() => {
+          renderTourOnMap(activeTourPlan, false);
+          evaluateTourProgress();
+        }, 500);
+      }
+    }
+  } catch (e) {}
+}
+
+// Auto-bind Tour Planner on load
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initTourPlanner);
+} else {
+  initTourPlanner();
 }
 
 // ==========================================

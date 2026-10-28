@@ -855,6 +855,8 @@ body {
 #radarAlertBanner.hidden,
 #roadTransitionPopup.hidden,
 #pttRadioBanner.hidden,
+#tourProgressStrip.hidden,
+#tourProximityAlertCard.hidden,
 #radarToast.hidden {
   display: none !important;
 }
@@ -904,6 +906,16 @@ body {
 .sub-road-alert-card.toast-alert-card {
   border: 1.5px solid rgba(56, 189, 248, 0.7) !important;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 16px rgba(56, 189, 248, 0.25) !important;
+}
+
+.sub-road-alert-card.tour-progress-card {
+  border: 1.5px solid rgba(6, 182, 212, 0.75) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 18px rgba(6, 182, 212, 0.3) !important;
+}
+
+.sub-road-alert-card.tour-proximity-alert-card {
+  border: 1.5px solid rgba(245, 158, 11, 0.8) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 20px rgba(245, 158, 11, 0.35) !important;
 }
 
 /* Neon Icon Boxes */
@@ -1791,6 +1803,400 @@ body {
   25% { transform: rotate(-3deg); }
   75% { transform: rotate(3deg); }
 }
+
+/* ==========================================
+   GROUP TOUR & MULTI-STOP WAYPOINT PLANNER
+   ========================================== */
+
+/* 1. HUD Tour Button & Pulsing Dot */
+#openTourPlannerBtn {
+  position: relative;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+#openTourPlannerBtn:hover {
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.45);
+  border-color: rgba(0, 240, 255, 0.8) !important;
+}
+#openTourPlannerBtn:active {
+  transform: scale(0.95);
+}
+
+/* 2. Preset Chips */
+.preset-chip {
+  padding: 4px 10px;
+  font-size: 10.5px;
+  font-family: 'Chakra Petch', 'Rajdhani', sans-serif;
+  font-weight: 700;
+  color: #94a3b8;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(51, 65, 85, 0.85);
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  white-space: nowrap;
+}
+.preset-chip:hover {
+  color: #00f0ff;
+  border-color: rgba(0, 240, 255, 0.7);
+  background: rgba(0, 240, 255, 0.12);
+  transform: translateY(-1px);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.25);
+}
+.preset-chip:active {
+  transform: scale(0.95);
+}
+
+/* 3. Waypoint Builder Item Cards */
+.waypoint-item-card {
+  position: relative;
+  background: rgba(10, 15, 26, 0.95);
+  border: 1.5px solid rgba(51, 65, 85, 0.8);
+  border-radius: 14px;
+  padding: 10px 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.waypoint-item-card:hover {
+  border-color: rgba(0, 240, 255, 0.4);
+}
+.waypoint-item-card.is-start {
+  border-color: rgba(16, 185, 129, 0.6);
+}
+.waypoint-item-card.is-dest {
+  border-color: rgba(6, 182, 212, 0.6);
+}
+.waypoint-item-card.is-regroup {
+  border-color: rgba(245, 158, 11, 0.6);
+}
+.waypoint-item-card.is-refuel {
+  border-color: rgba(249, 115, 22, 0.6);
+}
+
+.waypoint-num-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  font-family: 'Orbitron', monospace;
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+.waypoint-num-badge.badge-start {
+  background: rgba(16, 185, 129, 0.25);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.6);
+}
+.waypoint-num-badge.badge-dest {
+  background: rgba(6, 182, 212, 0.25);
+  color: #22d3ee;
+  border: 1px solid rgba(6, 182, 212, 0.6);
+}
+.waypoint-num-badge.badge-regroup {
+  background: rgba(245, 158, 11, 0.25);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.6);
+}
+.waypoint-num-badge.badge-refuel {
+  background: rgba(249, 115, 22, 0.25);
+  color: #fb923c;
+  border: 1px solid rgba(249, 115, 22, 0.6);
+}
+.waypoint-num-badge.badge-rest {
+  background: rgba(20, 184, 166, 0.25);
+  color: #2dd4bf;
+  border: 1px solid rgba(20, 184, 166, 0.6);
+}
+
+/* 4. Nominatim Autocomplete Suggestions Dropdown */
+.nominatim-suggestions-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  margin-top: 4px;
+  max-height: 180px;
+  overflow-y: auto;
+  background: rgba(15, 23, 42, 0.98);
+  border: 1px solid rgba(0, 240, 255, 0.5);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 15px rgba(0, 240, 255, 0.2);
+  backdrop-filter: blur(16px);
+}
+.nominatim-item {
+  padding: 8px 12px;
+  font-size: 11px;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 600;
+  color: #cbd5e1;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.4);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.nominatim-item:last-child {
+  border-bottom: none;
+}
+.nominatim-item:hover,
+.nominatim-item.active {
+  background: rgba(0, 240, 255, 0.18);
+  color: #38bdf8;
+}
+
+/* 5. Custom Leaflet DivIcon Markers */
+.custom-tour-waypoint-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+.tour-waypoint-marker-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translate(-50%, -100%);
+  cursor: pointer;
+  user-select: none;
+  pointer-events: auto !important;
+}
+
+.tour-waypoint-badge {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.7);
+  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.tour-waypoint-marker-wrap:hover .tour-waypoint-badge {
+  transform: scale(1.15);
+}
+
+.tour-waypoint-num {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #020617;
+  border: 1.5px solid currentColor;
+  color: inherit;
+  font-family: 'Orbitron', monospace;
+  font-size: 9px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+.tour-waypoint-pin {
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 8px solid currentColor;
+  margin-top: -1px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+.tour-waypoint-label {
+  margin-top: 3px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(2, 6, 23, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: 'Chakra Petch', sans-serif;
+  font-size: 9.5px;
+  font-weight: 700;
+  pointer-events: none;
+}
+.tour-waypoint-type {
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+.tour-waypoint-name {
+  color: #f1f5f9;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Specific Marker Type Themes */
+/* 🟢 START (Emerald) */
+.tour-marker-start .tour-waypoint-badge {
+  background: linear-gradient(135deg, #059669, #10b981);
+  border: 2px solid #34d399;
+  color: #34d399;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.7);
+}
+.tour-marker-start .tour-waypoint-pin {
+  color: #10b981;
+}
+.tour-marker-start .tour-waypoint-label {
+  border-color: rgba(16, 185, 129, 0.6);
+}
+.tour-marker-start .tour-waypoint-type {
+  color: #34d399;
+}
+
+/* 🤝 REGROUP (Cyan / Amber Pulsing) */
+.tour-marker-regroup .tour-waypoint-badge {
+  background: linear-gradient(135deg, #0284c7, #f59e0b);
+  border: 2px solid #fef08a;
+  color: #f59e0b;
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.75), 0 0 35px rgba(2, 132, 199, 0.4);
+  animation: tourBadgePulseAmber 1.6s ease-in-out infinite;
+}
+.tour-marker-regroup .tour-waypoint-pin {
+  color: #f59e0b;
+}
+.tour-marker-regroup .tour-waypoint-label {
+  border-color: rgba(245, 158, 11, 0.7);
+}
+.tour-marker-regroup .tour-waypoint-type {
+  color: #fbbf24;
+}
+
+/* ⛽ REFUEL (Orange / Red) */
+.tour-marker-refuel .tour-waypoint-badge {
+  background: linear-gradient(135deg, #ea580c, #dc2626);
+  border: 2px solid #fed7aa;
+  color: #f97316;
+  box-shadow: 0 0 18px rgba(249, 115, 22, 0.7);
+  animation: tourBadgePulseOrange 1.8s ease-in-out infinite;
+}
+.tour-marker-refuel .tour-waypoint-pin {
+  color: #ea580c;
+}
+.tour-marker-refuel .tour-waypoint-label {
+  border-color: rgba(249, 115, 22, 0.7);
+}
+.tour-marker-refuel .tour-waypoint-type {
+  color: #fb923c;
+}
+
+/* ☕ REST (Teal / Amber) */
+.tour-marker-rest .tour-waypoint-badge {
+  background: linear-gradient(135deg, #0d9488, #d97706);
+  border: 2px solid #99f6e4;
+  color: #2dd4bf;
+  box-shadow: 0 0 16px rgba(20, 184, 166, 0.6);
+}
+.tour-marker-rest .tour-waypoint-pin {
+  color: #0d9488;
+}
+.tour-marker-rest .tour-waypoint-label {
+  border-color: rgba(20, 184, 166, 0.6);
+}
+.tour-marker-rest .tour-waypoint-type {
+  color: #2dd4bf;
+}
+
+/* 🏁 END / DESTINATION (Checkered Neon Cyan) */
+.tour-marker-dest .tour-waypoint-badge {
+  background: linear-gradient(135deg, #0284c7, #06b6d4);
+  border: 2px solid #67e8f9;
+  color: #22d3ee;
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.8);
+  animation: tourBadgePulseCyan 2s ease-in-out infinite;
+}
+.tour-marker-dest .tour-waypoint-pin {
+  color: #06b6d4;
+}
+.tour-marker-dest .tour-waypoint-label {
+  border-color: rgba(6, 182, 212, 0.7);
+}
+.tour-marker-dest .tour-waypoint-type {
+  color: #22d3ee;
+}
+
+/* Marker Keyframe Glow Pulses */
+@keyframes tourBadgePulseAmber {
+  0%, 100% { box-shadow: 0 0 16px rgba(245, 158, 11, 0.7), 0 0 28px rgba(2, 132, 199, 0.3); }
+  50% { box-shadow: 0 0 26px rgba(245, 158, 11, 0.95), 0 0 45px rgba(2, 132, 199, 0.6); }
+}
+@keyframes tourBadgePulseOrange {
+  0%, 100% { box-shadow: 0 0 16px rgba(249, 115, 22, 0.65); }
+  50% { box-shadow: 0 0 26px rgba(249, 115, 22, 0.95), 0 0 40px rgba(239, 68, 68, 0.45); }
+}
+@keyframes tourBadgePulseCyan {
+  0%, 100% { box-shadow: 0 0 16px rgba(6, 182, 212, 0.65); }
+  50% { box-shadow: 0 0 28px rgba(6, 182, 212, 0.95), 0 0 45px rgba(0, 240, 255, 0.5); }
+}
+
+/* 6. Mini Alert Dock Tour Icons */
+.tour-dock-btn {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.tour-dock-btn:hover {
+  transform: scale(1.08);
+}
+.tour-dock-btn:active {
+  transform: scale(0.95);
+}
+
+.tour-dock-regroup {
+  border: 2px solid #f59e0b;
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.6);
+}
+.tour-dock-refuel {
+  border: 2px solid #f97316;
+  box-shadow: 0 0 16px rgba(249, 115, 22, 0.6);
+}
+
+/* 7. Tour Progress Strip Chain Breadcrumb Styling */
+#tourChainBreadcrumb {
+  line-height: 1.4;
+  letter-spacing: 0.3px;
+}
+.tour-breadcrumb-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.tour-breadcrumb-step.completed {
+  color: #34d399;
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+.tour-breadcrumb-step.active {
+  color: #00f0ff;
+  font-weight: 800;
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+}
+.tour-breadcrumb-step.upcoming {
+  color: #94a3b8;
+  opacity: 0.85;
+}
+
 
 
 
