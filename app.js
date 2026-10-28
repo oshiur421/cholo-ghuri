@@ -52,7 +52,7 @@ window.openJoinModal = function() {
     modal.style.removeProperty("opacity");
     modal.style.removeProperty("pointer-events");
     modal.style.display = "flex";
-    modal.style.zIndex = "10000";
+    modal.style.zIndex = "99999";
     modal.style.opacity = "1";
     modal.style.pointerEvents = "auto";
   }
@@ -185,6 +185,10 @@ window.submitOnboarding = async function(event) {
   try {
     const key = typeof SESSION_STORAGE_KEY !== "undefined" ? SESSION_STORAGE_KEY : "cholo_ghuri_session";
     sessionStorage.setItem(key, JSON.stringify(sessionData));
+    localStorage.setItem(key, JSON.stringify(sessionData));
+    localStorage.setItem("cg_rider_name", name);
+    localStorage.setItem("cg_room_code", code);
+    localStorage.setItem("cg_is_leader", String(finalIsLeader));
   } catch (e) {}
 
   // Update Top HUD room code and captain indicators
@@ -6913,39 +6917,43 @@ function initApp() {
   try {
     const urlParams = new URLSearchParams(window.location.search);
     const roomParam = urlParams.get("room") || urlParams.get("room_code");
-    const hasExistingSession = loadSavedSession();
+    loadSavedSession();
 
+    // Retrieve previous rider credentials from session or localStorage for convenient pre-filling
+    let prefillName = (currentSession && currentSession.riderName) || "";
+    let prefillRoom = (currentSession && currentSession.roomCode && currentSession.roomCode !== "----") ? currentSession.roomCode : "";
+    let prefillLeader = Boolean(currentSession && currentSession.isLeader);
+
+    try {
+      if (!prefillName) prefillName = localStorage.getItem("cg_rider_name") || "";
+      if (!prefillRoom) prefillRoom = localStorage.getItem("cg_room_code") || "";
+      if (localStorage.getItem("cg_is_leader") !== null) {
+        prefillLeader = localStorage.getItem("cg_is_leader") === "true";
+      }
+    } catch (e) {}
+
+    // Check if an invite link parameter was provided (?room=...)
     if (roomParam) {
-      const cleanParam = roomParam.trim().toUpperCase();
-      console.log("Tour room invite parameter detected from URL:", cleanParam);
-      if (roomCodeInput) roomCodeInput.value = cleanParam;
-      if (hasExistingSession && currentSession.riderName) {
-        if (riderNameInput) riderNameInput.value = currentSession.riderName;
-      }
-      window.openJoinModal();
-      if (typeof window.checkRoomLeaderStatus === "function") {
-        window.checkRoomLeaderStatus(cleanParam);
-      }
-      showRadarToast("CONVOY INVITE DETECTED", `Room ${cleanParam} pre-filled! Enter your name & hit Start Riding.`);
-    } else if (hasExistingSession && currentSession.roomCode && currentSession.roomCode !== "----" && currentSession.riderName) {
-      console.log("Restoring active biker session:", currentSession);
-      if (riderNameInput) riderNameInput.value = currentSession.riderName;
-      if (roomCodeInput) roomCodeInput.value = currentSession.roomCode;
-      if (isLeaderCheckbox) isLeaderCheckbox.checked = currentSession.isLeader;
-      if (typeof window.checkRoomLeaderStatus === "function") {
-        window.checkRoomLeaderStatus(currentSession.roomCode);
-      }
-      applySessionUI();
-    } else {
-      currentSession.riderId = generateUUID();
-      currentSession.roomCode = "";
-      currentSession.riderName = "";
-      const activeRoomCodeEl = document.getElementById("activeRoomCode");
-      if (activeRoomCodeEl) activeRoomCodeEl.textContent = "----";
-      window.openJoinModal();
+      prefillRoom = roomParam.trim().toUpperCase();
+      console.log("Tour room invite parameter detected from URL:", prefillRoom);
+      showRadarToast("CONVOY INVITE DETECTED", `Room ${prefillRoom} pre-filled! Enter your name & hit Start Riding.`);
     }
+
+    // Pre-fill modal inputs with previous session / localStorage values
+    if (riderNameInput && prefillName) riderNameInput.value = prefillName;
+    if (roomCodeInput && prefillRoom) roomCodeInput.value = prefillRoom;
+    if (isLeaderCheckbox) isLeaderCheckbox.checked = prefillLeader;
+
+    // Check room leader status if room code is present
+    if (prefillRoom && typeof window.checkRoomLeaderStatus === "function") {
+      window.checkRoomLeaderStatus(prefillRoom);
+    }
+
+    // ALWAYS display the onboarding modal first on initial boot/reload!
+    // Never auto-resume into live map without explicit "⚡ START RIDING" tap.
+    window.openJoinModal();
   } catch (err) {
-    console.warn("Session loading error handled:", err);
+    console.warn("Startup onboarding setup error handled:", err);
     window.openJoinModal();
   }
 

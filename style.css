@@ -359,7 +359,7 @@ body {
 #onboardingModal {
   position: fixed !important;
   inset: 0 !important;
-  z-index: 10000 !important;
+  z-index: 99999 !important;
 }
 
 .leaflet-control-zoom {
@@ -1299,12 +1299,19 @@ body {
   cursor: crosshair !important;
 }
 
-/* Onboarding Modal Strict Hide State */
+/* Onboarding Modal Strict Hide / Show State */
 #onboardingModal.hidden {
   display: none !important;
   opacity: 0 !important;
   pointer-events: none !important;
   visibility: hidden !important;
+}
+
+#onboardingModal:not(.hidden) {
+  display: flex !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  visibility: visible !important;
 }
 
 /* ==================== POLICE RADAR POPUP & PHOTO STYLING ==================== */
