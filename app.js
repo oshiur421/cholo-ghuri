@@ -19,9 +19,12 @@ window.ensureLeafletMap = function() {
     mapEl.innerHTML = '';
   }
   window.map = L.map('map', { zoomControl: false, attributionControl: true }).setView([23.8103, 90.4125], 13);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '© OpenStreetMap'
+  const mapboxToken = 'pk.eyJ1Ijoib3NoaXVyMjQyIiwiYSI6ImNtdnNkaDluazA1NnAzMHF3dnZoc3o4ODgifQ.HNHHnUivjVDOU7z99iX3lg';
+  L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/navigation-night-v1/tiles/512/{z}/{x}/{y}?access_token=${mapboxToken}`, {
+    maxZoom: 20,
+    tileSize: 512,
+    zoomOffset: -1,
+    attribution: '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a>'
   }).addTo(window.map);
   setTimeout(() => window.map.invalidateSize(), 150);
   setTimeout(() => window.map.invalidateSize(), 600);

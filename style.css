@@ -235,8 +235,9 @@ body {
   visibility: visible !important;
 }
 
+/* Mapbox Navigation Night is natively dark mode; no invert filter needed */
 .leaflet-tile-pane {
-  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+  filter: none;
 }
 
 .hud-top-bar {
