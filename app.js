@@ -3965,25 +3965,99 @@ function showOnboardingModal(show) {
 }
 
 let toastTimeout = null;
+
+function updateMiniAlertDockPosition() {
+  const dock = document.getElementById("miniAlertDock");
+  if (!dock) return;
+
+  const subSection = document.getElementById("subRoadAlertSection");
+  if (subSection) {
+    const visibleCards = subSection.querySelectorAll(".sub-road-alert-card:not(.hidden)");
+    if (visibleCards.length > 0) {
+      let maxBottom = 0;
+      visibleCards.forEach(card => {
+        const rect = card.getBoundingClientRect();
+        if (rect.bottom > maxBottom) maxBottom = rect.bottom;
+      });
+      if (maxBottom > 0) {
+        const targetTop = Math.max(130, Math.round(maxBottom + 12));
+        dock.style.setProperty("--mini-dock-top", targetTop + "px");
+        return;
+      }
+    }
+  }
+
+  // Fallback when no alerts are open
+  const header = document.querySelector(".hud-top-bar") || document.getElementById("mainHeader");
+  const baseTop = header ? Math.round(header.getBoundingClientRect().bottom + 10) : 130;
+  dock.style.setProperty("--mini-dock-top", Math.max(125, baseTop) + "px");
+}
+window.updateMiniAlertDockPosition = updateMiniAlertDockPosition;
+
 function showRadarToast(title, body) {
   const toast = document.getElementById("radarToast");
   const toastTitle = document.getElementById("toastTitle");
   const toastBody = document.getElementById("toastBody");
+  const toastIcon = document.getElementById("toastIcon");
+  const toastIconBox = document.getElementById("toastIconBox");
 
-  if (!toast || !toastTitle || !toastBody) return;
+  if (!toast) return;
+  if (toastTitle) toastTitle.textContent = title || "NOTIFICATION";
+  if (toastBody) toastBody.textContent = body || "";
 
-  toastTitle.textContent = title;
-  toastBody.textContent = body;
+  // Dynamic Icon & Box Accent based on Notification Type
+  const upperTitle = String(title || "").toUpperCase();
+  if (toastIconBox && toastIcon) {
+    toastIconBox.className = "alert-card-icon";
+    if (upperTitle.includes("LOCATING") || upperTitle.includes("TELEPORT") || upperTitle.includes("RIDER")) {
+      toastIconBox.classList.add("alert-card-icon-sky");
+      toastIcon.className = "fa-solid fa-crosshairs text-sky-400";
+    } else if (upperTitle.includes("POLICE") || upperTitle.includes("RADAR") || upperTitle.includes("VOTE") || upperTitle.includes("CHECKPOST")) {
+      toastIconBox.classList.add("alert-card-icon-rose");
+      toastIcon.className = "fa-solid fa-shield-halved text-rose-400";
+    } else if (upperTitle.includes("CONVOY") || upperTitle.includes("GAP") || upperTitle.includes("WARNING") || upperTitle.includes("NOTICE")) {
+      toastIconBox.classList.add("alert-card-icon-amber");
+      toastIcon.className = "fa-solid fa-triangle-exclamation text-amber-400";
+    } else if (upperTitle.includes("RADIO") || upperTitle.includes("MIC") || upperTitle.includes("AUDIO") || upperTitle.includes("WALKIE")) {
+      toastIconBox.classList.add("alert-card-icon-emerald");
+      toastIcon.className = "fa-solid fa-walkie-talkie text-emerald-400";
+    } else {
+      toastIconBox.classList.add("alert-card-icon-sky");
+      toastIcon.className = "fa-solid fa-bell text-sky-400";
+    }
+  }
 
-  toast.classList.remove("-translate-y-12", "opacity-0", "pointer-events-none");
+  // Display card inside #subRoadAlertSection
+  toast.classList.remove("hidden", "-translate-y-12", "opacity-0", "pointer-events-none");
   toast.classList.add("translate-y-0", "opacity-100");
+
+  setTimeout(updateMiniAlertDockPosition, 50);
 
   if (toastTimeout) clearTimeout(toastTimeout);
   toastTimeout = setTimeout(() => {
-    toast.classList.add("-translate-y-12", "opacity-0", "pointer-events-none");
-    toast.classList.remove("translate-y-0", "opacity-100");
+    hideRadarToast();
   }, 4500);
 }
+
+function hideRadarToast() {
+  const toast = document.getElementById("radarToast");
+  if (toast) {
+    toast.classList.add("hidden", "-translate-y-12", "opacity-0", "pointer-events-none");
+    toast.classList.remove("translate-y-0", "opacity-100");
+  }
+  setTimeout(updateMiniAlertDockPosition, 50);
+}
+
+// Global Aliases for All App Popups & Notifications
+window.showRadarToast = showRadarToast;
+window.hideRadarToast = hideRadarToast;
+window.showToast = showRadarToast;
+window.showAlert = showRadarToast;
+window.locateRider = function(riderId) {
+  if (typeof window.centerOnRider === "function") {
+    window.centerOnRider(riderId);
+  }
+};
 
 function calculateBearing(startLat, startLng, destLat, destLng) {
   const toRad = (deg) => (deg * Math.PI) / 180;
@@ -4188,19 +4262,33 @@ function getSupportedAudioMimeType() {
 function showPttTransmittingBanner() {
   const banner = document.getElementById("pttRadioBanner");
   const text = document.getElementById("pttRadioBannerText");
+  const iconBox = document.getElementById("pttAlertCardIcon");
   if (banner && text) {
     const name = (currentSession && currentSession.riderName) ? currentSession.riderName : "You";
     text.textContent = `📻 ${name} transmitting...`;
-    banner.className = "ptt-radio-banner transmitting";
+    banner.classList.remove("hidden");
+    banner.classList.add("transmitting");
+    banner.classList.remove("receiving");
+    if (iconBox) {
+      iconBox.className = "alert-card-icon alert-card-icon-rose";
+    }
+    setTimeout(updateMiniAlertDockPosition, 50);
   }
 }
 
 function showPttReceivingBanner(senderName) {
   const banner = document.getElementById("pttRadioBanner");
   const text = document.getElementById("pttRadioBannerText");
+  const iconBox = document.getElementById("pttAlertCardIcon");
   if (banner && text) {
     text.textContent = `🔊 ${senderName || "Rider"} speaking...`;
-    banner.className = "ptt-radio-banner receiving";
+    banner.classList.remove("hidden");
+    banner.classList.add("receiving");
+    banner.classList.remove("transmitting");
+    if (iconBox) {
+      iconBox.className = "alert-card-icon alert-card-icon-cyan";
+    }
+    setTimeout(updateMiniAlertDockPosition, 50);
   }
 }
 
@@ -4208,7 +4296,9 @@ function hidePttRadioBanner() {
   if (isPttRecording) return;
   const banner = document.getElementById("pttRadioBanner");
   if (banner) {
-    banner.className = "ptt-radio-banner hidden";
+    banner.classList.add("hidden");
+    banner.classList.remove("transmitting", "receiving");
+    setTimeout(updateMiniAlertDockPosition, 50);
   }
 }
 
@@ -5222,13 +5312,28 @@ function initApp() {
 
   if (dismissToastBtn) {
     dismissToastBtn.addEventListener("click", () => {
-      const toast = document.getElementById("radarToast");
-      if (toast) {
-        toast.classList.add("-translate-y-12", "opacity-0", "pointer-events-none");
-        toast.classList.remove("translate-y-0", "opacity-100");
-      }
+      playSound("click");
+      hideRadarToast();
     });
   }
+
+  const dismissPttRadioBtn = document.getElementById("dismissPttRadioBtn");
+  if (dismissPttRadioBtn) {
+    dismissPttRadioBtn.addEventListener("click", () => {
+      playSound("click");
+      hidePttRadioBanner();
+    });
+  }
+
+  // Dynamic Observer on #subRoadAlertSection to guarantee #miniAlertDock never collides or gets covered
+  const subRoadSection = document.getElementById("subRoadAlertSection");
+  if (subRoadSection && window.MutationObserver) {
+    const dockObserver = new MutationObserver(() => {
+      updateMiniAlertDockPosition();
+    });
+    dockObserver.observe(subRoadSection, { attributes: true, subtree: true, attributeFilter: ["class", "style"] });
+  }
+  updateMiniAlertDockPosition();
 
   // 1. Wake Lock
   try {

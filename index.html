@@ -262,18 +262,6 @@
   <!-- ==================== FLOATING MINIMIZED ALERT DOCK ==================== -->
   <div id="miniAlertDock" class="mini-alert-dock" aria-label="Active floating alerts"></div>
 
-  <!-- ==================== PTT ACTIVE RADIO BANNER (TOP-CENTER) ==================== -->
-  <div id="pttRadioBanner" class="ptt-radio-banner hidden" style="position: fixed; top: 135px; left: 50%; transform: translateX(-50%); z-index: 9600; pointer-events: none;">
-    <div class="ptt-radio-banner-content">
-      <div class="ptt-audio-wave" aria-hidden="true">
-        <span class="wave-bar"></span>
-        <span class="wave-bar"></span>
-        <span class="wave-bar"></span>
-        <span class="wave-bar"></span>
-      </div>
-      <span id="pttRadioBannerText" class="ptt-radio-banner-text">📻 Rider transmitting...</span>
-    </div>
-  </div>
 
   <!-- ==================== TOP FLOATING HUD BAR ==================== -->
   <header class="hud-top-bar fixed top-0 left-0 right-0 z-[10000] p-1.5 sm:p-3 pointer-events-none w-full max-w-full overflow-x-hidden" style="pointer-events: none !important; z-index: 10000 !important;">
@@ -372,18 +360,18 @@
         <!-- 1. Convoy Distance Gap Alert Card -->
         <div id="distanceAlertBanner" data-alias="convoyAlertBanner stragglerAlertBanner" class="sub-road-alert-card convoy-alert-card hidden">
           <div class="alert-card-left flex items-center gap-2.5 min-w-0">
-            <div class="alert-card-icon bg-amber-500/20 text-amber-400 border border-amber-500/40">
+            <div class="alert-card-icon alert-card-icon-amber">
               <i class="fa-solid fa-triangle-exclamation"></i>
             </div>
             <div class="alert-card-text flex flex-col min-w-0">
-              <span class="alert-card-label text-[8px] sm:text-[9px] uppercase tracking-wider text-amber-400 font-bold">Convoy Gap Alert</span>
-              <span id="convoyAlertText" class="alert-card-desc font-cyber font-bold text-xs sm:text-sm text-slate-100">
+              <span class="alert-card-label text-amber-400 font-bold uppercase tracking-wider">CONVOY GAP ALERT</span>
+              <span id="convoyAlertText" class="alert-card-desc font-cyber font-bold text-xs sm:text-sm text-slate-100 truncate">
                 ⚠️ Rider • 1.5 km dure ache!
               </span>
             </div>
           </div>
           <div class="alert-card-actions flex items-center gap-1.5 flex-shrink-0">
-            <button id="viewStragglerBtn" type="button" class="sub-alert-btn sub-alert-btn-action bg-amber-500/20 hover:bg-amber-500/35 border-amber-500/50 text-amber-300" title="Locate Straggler Rider">
+            <button id="viewStragglerBtn" type="button" class="sub-alert-btn sub-alert-btn-action sub-alert-btn-amber" title="Locate Straggler Rider">
               <i class="fa-solid fa-location-crosshairs text-[10px]"></i>
               <span>LOCATE</span>
             </button>
@@ -399,18 +387,18 @@
         <!-- 2. Police Checkpost Alert Card -->
         <div id="radarAlertBanner" data-alias="approachingPoliceBanner policeAlertBanner" class="sub-road-alert-card police-alert-card hidden">
           <div class="alert-card-left flex items-center gap-2.5 min-w-0">
-            <div class="alert-card-icon bg-rose-500/20 text-rose-400 border border-rose-500/40">
+            <div class="alert-card-icon alert-card-icon-rose">
               <i class="fa-solid fa-shield-halved"></i>
             </div>
             <div class="alert-card-text flex flex-col min-w-0">
-              <span class="alert-card-label text-[8px] sm:text-[9px] uppercase tracking-wider text-rose-400 font-bold">Police Checkpost Radar</span>
-              <span id="approachingPoliceText" class="alert-card-desc font-cyber font-bold text-xs sm:text-sm text-slate-100">
+              <span class="alert-card-label text-rose-400 font-bold uppercase tracking-wider">POLICE RADAR ALERT</span>
+              <span id="approachingPoliceText" class="alert-card-desc font-cyber font-bold text-xs sm:text-sm text-slate-100 truncate">
                 🛡️ Police Checkpost • 850m samne (by Sakib)
               </span>
             </div>
           </div>
           <div class="alert-card-actions flex items-center gap-1.5 flex-shrink-0">
-            <button id="verifyApproachingBtn" type="button" class="sub-alert-btn sub-alert-btn-action bg-rose-500/20 hover:bg-rose-500/35 border-rose-500/50 text-rose-300" title="Verify Police Checkpost">
+            <button id="verifyApproachingBtn" type="button" class="sub-alert-btn sub-alert-btn-action sub-alert-btn-rose" title="Verify Police Checkpost">
               <i class="fa-solid fa-circle-check text-[10px]"></i>
               <span>VERIFY</span>
             </button>
@@ -426,18 +414,18 @@
         <!-- 3. Speed Limit / Road Alert Card -->
         <div id="roadTransitionPopup" class="sub-road-alert-card road-alert-card hidden">
           <div class="alert-card-left flex items-center gap-2.5 min-w-0">
-            <div class="alert-card-icon bg-cyan-500/20 text-cyan-400 border border-cyan-500/40">
+            <div class="alert-card-icon alert-card-icon-cyan">
               <i class="fa-solid fa-road"></i>
             </div>
             <div class="alert-card-text flex flex-col min-w-0">
-              <span class="alert-card-label text-[8px] sm:text-[9px] uppercase tracking-wider text-cyan-400 font-bold">Speed Limit Alert</span>
-              <span id="roadTransitionAlertText" class="alert-card-desc font-cyber font-bold text-xs sm:text-sm text-slate-100">
+              <span class="alert-card-label text-cyan-400 font-bold uppercase tracking-wider">SPEED / ROAD ALERT</span>
+              <span id="roadTransitionAlertText" class="alert-card-desc font-cyber font-bold text-xs sm:text-sm text-slate-100 truncate">
                 🛣️ Dhaka - Mawa Expressway (N8) • Speed Limit 80 KM/H
               </span>
             </div>
           </div>
           <div class="alert-card-actions flex items-center gap-1.5 flex-shrink-0">
-            <button id="viewRoadDetailsBtn" type="button" class="sub-alert-btn sub-alert-btn-action bg-cyan-500/20 hover:bg-cyan-500/35 border-cyan-500/50 text-cyan-300" title="View Road Details Modal">
+            <button id="viewRoadDetailsBtn" type="button" class="sub-alert-btn sub-alert-btn-action sub-alert-btn-cyan" title="View Road Details Modal">
               <i class="fa-solid fa-circle-info text-[10px]"></i>
               <span>DETAILS</span>
             </button>
@@ -445,6 +433,54 @@
               <i class="fa-solid fa-minus text-[10px]"></i>
             </button>
             <button id="dismissRoadAlertBtn" type="button" class="sub-alert-btn sub-alert-btn-close" title="Permanently Dismiss Alert">
+              <i class="fa-solid fa-xmark text-xs"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- 4. PTT Active Radio / Walkie-Talkie Status Card -->
+        <div id="pttRadioBanner" class="sub-road-alert-card ptt-alert-card hidden">
+          <div class="alert-card-left flex items-center gap-2.5 min-w-0">
+            <div id="pttAlertCardIcon" class="alert-card-icon alert-card-icon-emerald">
+              <i class="fa-solid fa-walkie-talkie"></i>
+            </div>
+            <div class="alert-card-text flex flex-col min-w-0">
+              <span class="alert-card-label text-emerald-400 font-bold uppercase tracking-wider">WALKIE-TALKIE RADIO</span>
+              <div class="flex items-center gap-2 min-w-0">
+                <div class="ptt-audio-wave inline-flex flex-shrink-0" aria-hidden="true">
+                  <span class="wave-bar"></span>
+                  <span class="wave-bar"></span>
+                  <span class="wave-bar"></span>
+                  <span class="wave-bar"></span>
+                </div>
+                <span id="pttRadioBannerText" class="alert-card-desc font-cyber font-bold text-xs sm:text-sm text-slate-100 truncate">
+                  📻 Rider transmitting...
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="alert-card-actions flex items-center gap-1.5 flex-shrink-0">
+            <button id="dismissPttRadioBtn" type="button" class="sub-alert-btn sub-alert-btn-close" title="Dismiss Radio Status">
+              <i class="fa-solid fa-xmark text-xs"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- 5. Universal Toast / Notification Card (LOCATING RIDER, System Toast, etc.) -->
+        <div id="radarToast" data-alias="systemToastAlert locatingRiderPopup" class="sub-road-alert-card toast-alert-card hidden">
+          <div class="alert-card-left flex items-center gap-2.5 min-w-0">
+            <div id="toastIconBox" class="alert-card-icon alert-card-icon-sky">
+              <i id="toastIcon" class="fa-solid fa-crosshairs text-sky-400"></i>
+            </div>
+            <div class="alert-card-text flex flex-col min-w-0">
+              <span id="toastTitle" class="alert-card-label text-sky-400 font-bold uppercase tracking-wider truncate">LOCATING RIDER</span>
+              <span id="toastBody" class="alert-card-desc font-cyber font-bold text-xs sm:text-sm text-slate-100 truncate">
+                Focused on Rider_471
+              </span>
+            </div>
+          </div>
+          <div class="alert-card-actions flex items-center gap-1.5 flex-shrink-0">
+            <button id="dismissToastBtn" type="button" class="sub-alert-btn sub-alert-btn-close" title="Close Notification">
               <i class="fa-solid fa-xmark text-xs"></i>
             </button>
           </div>
@@ -561,21 +597,6 @@
     </div>
   </div>
 
-  <!-- ==================== RADAR & HIGHWAY NOTIFICATION TOAST ==================== -->
-  <div id="radarToast" class="fixed top-20 sm:top-24 left-1/2 -translate-x-1/2 z-[1400] transition-all duration-300 transform -translate-y-12 opacity-0 pointer-events-none w-11/12 max-w-md">
-    <div class="glass-panel-orange border-2 border-orange-500 rounded-2xl p-3 sm:p-4 shadow-2xl flex items-center gap-3">
-      <div class="w-10 h-10 rounded-xl bg-orange-600/30 border border-orange-500 flex items-center justify-center text-orange-400 text-xl animate-pulse">
-        <i class="fa-solid fa-triangle-exclamation"></i>
-      </div>
-      <div class="flex-1">
-        <h4 id="toastTitle" class="font-cyber font-bold text-sm sm:text-base text-orange-300">RADAR ALERT DETECTED</h4>
-        <p id="toastBody" class="text-xs text-slate-300 font-medium">Police checkpost reported 1.2 km ahead!</p>
-      </div>
-      <button id="dismissToastBtn" class="text-slate-400 hover:text-white p-1">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-    </div>
-  </div>
 
   <!-- ==================== PUSH-TO-TALK (PTT) WALKIE-TALKIE DOCK ==================== -->
   <div id="pttWalkieDock" class="ptt-walkie-dock" style="position: fixed; left: 12px; bottom: 96px; z-index: 9500; display: flex; flex-direction: column; align-items: center; gap: 8px;" aria-label="Walkie-Talkie Voice Communicator">
