@@ -186,9 +186,7 @@ window.submitOnboarding = async function(event) {
     const key = typeof SESSION_STORAGE_KEY !== "undefined" ? SESSION_STORAGE_KEY : "cholo_ghuri_session";
     sessionStorage.setItem(key, JSON.stringify(sessionData));
     localStorage.setItem(key, JSON.stringify(sessionData));
-    localStorage.setItem("cg_rider_name", name);
     localStorage.setItem("cg_room_code", code);
-    localStorage.setItem("cg_is_leader", String(finalIsLeader));
   } catch (e) {}
 
   // Update Top HUD room code and captain indicators
@@ -6387,6 +6385,10 @@ function initApp() {
   const isLeaderCheckbox = document.getElementById("isLeaderCheckbox");
   const generateCodeBtn = document.getElementById("generateCodeBtn");
 
+  // Keep Rider Name blank and Leader toggle unchecked on startup for a clean form
+  if (riderNameInput) riderNameInput.value = "";
+  if (isLeaderCheckbox) isLeaderCheckbox.checked = false;
+
   // Controls & Drawer
   const recenterBtn = document.getElementById("recenterBtn");
   const reportPoliceBtn = document.getElementById("reportPoliceBtn");
@@ -6919,17 +6921,20 @@ function initApp() {
     const roomParam = urlParams.get("room") || urlParams.get("room_code");
     loadSavedSession();
 
-    // Retrieve previous rider credentials from session or localStorage for convenient pre-filling
-    let prefillName = (currentSession && currentSession.riderName) || "";
-    let prefillRoom = (currentSession && currentSession.roomCode && currentSession.roomCode !== "----") ? currentSession.roomCode : "";
-    let prefillLeader = Boolean(currentSession && currentSession.isLeader);
+    // 1. Strictly keep Rider Call-Sign / Name input blank on load (placeholder visible)
+    if (riderNameInput) {
+      riderNameInput.value = "";
+    }
 
+    // 2. Reset Ride Leader toggle to unchecked (false) by default
+    if (isLeaderCheckbox) {
+      isLeaderCheckbox.checked = false;
+    }
+
+    // 3. Pre-fill room code if available from previous session, localStorage, or invite URL
+    let prefillRoom = (currentSession && currentSession.roomCode && currentSession.roomCode !== "----") ? currentSession.roomCode : "";
     try {
-      if (!prefillName) prefillName = localStorage.getItem("cg_rider_name") || "";
       if (!prefillRoom) prefillRoom = localStorage.getItem("cg_room_code") || "";
-      if (localStorage.getItem("cg_is_leader") !== null) {
-        prefillLeader = localStorage.getItem("cg_is_leader") === "true";
-      }
     } catch (e) {}
 
     // Check if an invite link parameter was provided (?room=...)
@@ -6939,10 +6944,9 @@ function initApp() {
       showRadarToast("CONVOY INVITE DETECTED", `Room ${prefillRoom} pre-filled! Enter your name & hit Start Riding.`);
     }
 
-    // Pre-fill modal inputs with previous session / localStorage values
-    if (riderNameInput && prefillName) riderNameInput.value = prefillName;
-    if (roomCodeInput && prefillRoom) roomCodeInput.value = prefillRoom;
-    if (isLeaderCheckbox) isLeaderCheckbox.checked = prefillLeader;
+    if (roomCodeInput && prefillRoom) {
+      roomCodeInput.value = prefillRoom;
+    }
 
     // Check room leader status if room code is present
     if (prefillRoom && typeof window.checkRoomLeaderStatus === "function") {
@@ -6954,6 +6958,8 @@ function initApp() {
     window.openJoinModal();
   } catch (err) {
     console.warn("Startup onboarding setup error handled:", err);
+    if (riderNameInput) riderNameInput.value = "";
+    if (isLeaderCheckbox) isLeaderCheckbox.checked = false;
     window.openJoinModal();
   }
 
