@@ -7467,6 +7467,10 @@ function checkInAppBrowser() {
       if (banner) {
         banner.classList.remove("hidden");
         document.body.classList.add("has-iab-banner");
+        const warningText = document.getElementById("iabWarningText");
+        if (warningText) {
+          warningText.innerHTML = "⚠️ Facebook's in-app browser blocks GPS! To get your Real Location, click the three dots (⋮) on the top right and select <strong>'Open in System Browser / Chrome'</strong>.";
+        }
       }
 
       if (chromeBtn && isAndroid) {
