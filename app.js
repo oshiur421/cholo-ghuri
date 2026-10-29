@@ -368,8 +368,108 @@ window.recenterCamera = function() {
     isCameraLocked = true;
     if (typeof updateRecenterButtonUI === "function") updateRecenterButtonUI();
     const targetMap = window.map || (typeof map !== "undefined" ? map : null);
-    if (targetMap && typeof riderLocation !== "undefined") {
-      targetMap.flyTo([riderLocation.lat, riderLocation.lng], 15, { animate: true, duration: 0.8 });
+
+    // If currently in Highway Simulation mode, center camera on simulated position
+    if (typeof isSimulating !== "undefined" && isSimulating) {
+      if (targetMap && typeof riderLocation !== "undefined") {
+        targetMap.flyTo([riderLocation.lat, riderLocation.lng], 16, { animate: true, duration: 0.8 });
+      }
+      return;
+    }
+
+    // Actively query fresh real-time GPS coordinates
+    if ("geolocation" in navigator && typeof navigator.geolocation.getCurrentPosition === "function") {
+      if (typeof showRadarToast === "function") {
+        showRadarToast("LOCATING GPS...", "Acquiring fresh real-time GPS fix...");
+      }
+
+      const applyPos = (pos, isFallback = false) => {
+        try {
+          const { latitude, longitude, heading, speed, accuracy } = pos.coords;
+          const speedKmH = speed !== null && speed >= 0 ? speed * 3.6 : 0;
+          const validHeading = heading !== null && !isNaN(heading) ? heading : (riderLocation.heading || 0);
+
+          riderLocation.lat = latitude;
+          riderLocation.lng = longitude;
+          riderLocation.speed = speedKmH;
+          riderLocation.heading = validHeading;
+          riderLocation.accuracy = accuracy || (isFallback ? 50 : 10);
+          riderLocation.hasRealGps = true;
+
+          if (typeof window.showGpsPermissionModal === "function") {
+            window.showGpsPermissionModal(false);
+          }
+
+          if (typeof updateUserMarker === "function") {
+            updateUserMarker(latitude, longitude, validHeading);
+          }
+          if (typeof updateSpeedometerDisplay === "function") {
+            updateSpeedometerDisplay(speedKmH);
+          }
+          if (typeof updateCompassHeading === "function") {
+            updateCompassHeading(validHeading);
+          }
+
+          if (targetMap) {
+            targetMap.flyTo([latitude, longitude], 16, { animate: true, duration: 0.8 });
+          }
+
+          if (typeof showRadarToast === "function") {
+            const accText = accuracy ? ` (±${Math.round(accuracy)}m)` : "";
+            showRadarToast("📍 GPS SYNCED", `Real GPS Locked: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}${accText}`);
+          }
+
+          if (typeof detectRoadTransition === "function") detectRoadTransition(latitude, longitude, true);
+          if (typeof broadcastCurrentLocation === "function") broadcastCurrentLocation();
+          if (typeof upsertLiveRiderData === "function") upsertLiveRiderData();
+          if (typeof evaluateConvoyDistances === "function") evaluateConvoyDistances();
+          if (typeof evaluatePoliceProximity === "function") evaluatePoliceProximity();
+        } catch (e) {
+          console.warn("[Recenter] Error applying fresh GPS coords:", e);
+        }
+      };
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => applyPos(pos, false),
+        (err) => {
+          console.warn("[Recenter] High accuracy GPS failed, trying network fallback:", err.message);
+          if (err.code === 1) {
+            if (typeof window.showGpsPermissionModal === "function") {
+              window.showGpsPermissionModal(true);
+            }
+            if (typeof showRadarToast === "function") {
+              showRadarToast("📍 GPS PERMISSION REQUIRED", "Allow location access to enable live GPS tracking.");
+            }
+            return;
+          }
+
+          // Fallback to network / cell-tower location
+          navigator.geolocation.getCurrentPosition(
+            (fallbackPos) => applyPos(fallbackPos, true),
+            (fallbackErr) => {
+              console.warn("[Recenter] Network fallback error:", fallbackErr.message);
+              if (fallbackErr.code === 1) {
+                if (typeof window.showGpsPermissionModal === "function") {
+                  window.showGpsPermissionModal(true);
+                }
+              } else {
+                if (targetMap && typeof riderLocation !== "undefined" && riderLocation.lat && riderLocation.lng) {
+                  targetMap.flyTo([riderLocation.lat, riderLocation.lng], 16, { animate: true, duration: 0.8 });
+                }
+                if (typeof showRadarToast === "function") {
+                  showRadarToast("📍 GPS SIGNAL LOW", "Unable to refresh GPS satellite fix right now.");
+                }
+              }
+            },
+            { enableHighAccuracy: false, timeout: 15000, maximumAge: 10000 }
+          );
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    } else {
+      if (targetMap && typeof riderLocation !== "undefined") {
+        targetMap.flyTo([riderLocation.lat, riderLocation.lng], 15, { animate: true, duration: 0.8 });
+      }
     }
   } catch (err) {
     console.warn("Recenter camera notice:", err);
@@ -728,13 +828,14 @@ let currentSession = {
 let currentSubgroup = "All Riders";
 window.currentSubgroup = currentSubgroup;
 
-// Live Rider Telemetry (Default: Dhaka Highway Core)
+// Live Rider Telemetry (Default: Dhaka Highway Core until real GPS lock)
 let riderLocation = {
   lat: 23.8103,
   lng: 90.4125,
   speed: 0, // km/h
   heading: 0, // degrees
-  accuracy: 10
+  accuracy: 10,
+  hasRealGps: false
 };
 
 // Map & Navigation State
@@ -3584,126 +3685,145 @@ function removeRemoteRiderMarker(riderId) {
 // ==========================================
 // 13. GPS TELEMETRY & HARDWARE TRACKING
 // ==========================================
-function requestQuickGeolocation() {
-  const DHAKA_LAT = 23.8103;
-  const DHAKA_LNG = 90.4125;
-  let hasResolved = false;
+function handleGeolocationSuccess(pos, isFallback = false) {
+  try {
+    const { latitude, longitude, speed, heading, accuracy } = pos.coords;
+    const speedKmH = speed !== null && speed >= 0 ? speed * 3.6 : 0;
+    const validHeading = heading !== null && !isNaN(heading) ? heading : (riderLocation.heading || 0);
 
-  // Immediate dark map centering on Dhaka if no location set yet
-  if (typeof map !== "undefined" && map) {
-    if (!riderLocation.lat || !riderLocation.lng) {
-      riderLocation.lat = DHAKA_LAT;
-      riderLocation.lng = DHAKA_LNG;
+    riderLocation.lat = latitude;
+    riderLocation.lng = longitude;
+    riderLocation.speed = speedKmH;
+    riderLocation.heading = validHeading;
+    riderLocation.accuracy = accuracy || (isFallback ? 50 : 10);
+    riderLocation.hasRealGps = true;
+
+    if (typeof window.showGpsPermissionModal === "function") {
+      window.showGpsPermissionModal(false);
     }
-    updateUserMarker(riderLocation.lat, riderLocation.lng, riderLocation.heading || 0);
-    map.invalidateSize();
+
+    updateUserMarker(latitude, longitude, validHeading);
+    updateSpeedometerDisplay(speedKmH);
+    evaluateOverspeed(speedKmH);
+    updateCompassHeading(validHeading);
+
+    if (typeof map !== "undefined" && map) {
+      map.setView([latitude, longitude], 15);
+      map.invalidateSize();
+    }
+
+    detectRoadTransition(latitude, longitude, true);
+    broadcastCurrentLocation();
+    upsertLiveRiderData();
+    evaluateConvoyDistances();
+    evaluatePoliceProximity();
+
+    if (isFallback) {
+      console.log(`[Geolocation] Real position locked via network/cell-tower: ${latitude.toFixed(4)}, ${longitude.toFixed(4)} (±${Math.round(accuracy || 0)}m)`);
+      if (typeof showRadarToast === "function") {
+        showRadarToast("📍 LOCATION LOCKED (NETWORK)", `Area locked: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+      }
+    } else {
+      console.log(`[Geolocation] Real high-accuracy GPS locked: ${latitude.toFixed(4)}, ${longitude.toFixed(4)} (±${Math.round(accuracy || 0)}m)`);
+      if (typeof showRadarToast === "function") {
+        showRadarToast("📍 REAL GPS LOCKED", `Satellite lock: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+      }
+    }
+  } catch (posErr) {
+    console.warn("GPS position update error handled:", posErr);
   }
 
-  // Fallback timeout: If GPS takes too long (> 2.5s) or permission slow/denied, ensure map is centered on Dhaka without freezing
-  const fallbackTimer = setTimeout(() => {
-    if (!hasResolved) {
-      hasResolved = true;
-      console.log("[Geolocation] Quick GPS lookup timed out (2.5s) - defaulted to Dhaka coords.");
-      if (typeof map !== "undefined" && map) {
-        map.setView([DHAKA_LAT, DHAKA_LNG], 13);
-        map.invalidateSize();
-      }
-      if (!isSimulating && typeof startGPSTracking === "function") {
-        startGPSTracking();
-      }
-    }
-  }, 2500);
+  if (!isSimulating && typeof startGPSTracking === "function") {
+    startGPSTracking();
+  }
+}
 
-  try {
-    if ("geolocation" in navigator && typeof navigator.geolocation.getCurrentPosition === "function") {
+function handleGeolocationError(err, source = "primary") {
+  console.warn(`[Geolocation] ${source} lookup error (code ${err.code}):`, err.message);
+
+  if (err.code === 1) {
+    // 1: PERMISSION_DENIED
+    // Do NOT load demo mode or simulation! Show permission modal with instructions
+    if (typeof window.showGpsPermissionModal === "function") {
+      window.showGpsPermissionModal(true);
+    }
+    if (typeof showRadarToast === "function") {
+      showRadarToast("📍 GPS PERMISSION REQUIRED", "Allow location access to enable live GPS tracking.");
+    }
+    return;
+  }
+
+  if (source === "primary" && (err.code === 2 || err.code === 3)) {
+    // 2: POSITION_UNAVAILABLE, 3: TIMEOUT
+    // High-accuracy GPS timed out or satellite lock unavailable (e.g. indoors, cloud cover, mobile data)
+    // Automatically fallback to network/cell-tower geolocation (works indoors and on mobile data)
+    console.log("[Geolocation] High-accuracy GPS timed out/unavailable. Attempting network/cell-tower fallback...");
+    if (typeof showRadarToast === "function") {
+      showRadarToast("LOCATING VIA CELL/NETWORK", "Connecting to nearby cell tower / network location...");
+    }
+
+    try {
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          if (hasResolved) return;
-          hasResolved = true;
-          clearTimeout(fallbackTimer);
-
-          try {
-            const { latitude, longitude, speed, heading, accuracy } = pos.coords;
-            const speedKmH = speed !== null && speed >= 0 ? speed * 3.6 : 0;
-            const validHeading = heading !== null && !isNaN(heading) ? heading : (riderLocation.heading || 0);
-
-            riderLocation.lat = latitude;
-            riderLocation.lng = longitude;
-            riderLocation.speed = speedKmH;
-            riderLocation.heading = validHeading;
-            riderLocation.accuracy = accuracy || 10;
-
-            updateUserMarker(latitude, longitude, validHeading);
-            updateSpeedometerDisplay(speedKmH);
-            evaluateOverspeed(speedKmH);
-            updateCompassHeading(validHeading);
-
-            if (typeof map !== "undefined" && map) {
-              map.setView([latitude, longitude], 15);
-              map.invalidateSize();
-            }
-
-            detectRoadTransition(latitude, longitude, true);
-            broadcastCurrentLocation();
-            upsertLiveRiderData();
-            evaluateConvoyDistances();
-            evaluatePoliceProximity();
-          } catch (posErr) {
-            console.warn("GPS position update error handled:", posErr);
-          }
-
-          if (!isSimulating && typeof startGPSTracking === "function") {
-            startGPSTracking();
-          }
+        (fallbackPos) => {
+          handleGeolocationSuccess(fallbackPos, true);
         },
-        (err) => {
-          if (hasResolved) return;
-          hasResolved = true;
-          clearTimeout(fallbackTimer);
-          console.warn("GPS permission slow, denied, or error:", err.message);
-
-          if (typeof map !== "undefined" && map) {
-            map.setView([DHAKA_LAT, DHAKA_LNG], 13);
-            map.invalidateSize();
-          }
-
-          if (!isSimulating && typeof startGPSTracking === "function") {
-            startGPSTracking();
-          }
+        (fallbackErr) => {
+          handleGeolocationError(fallbackErr, "network_fallback");
         },
-        { enableHighAccuracy: true, timeout: 2500, maximumAge: 5000 }
+        { enableHighAccuracy: false, timeout: 20000, maximumAge: 10000 }
       );
-    } else {
-      if (hasResolved) return;
-      hasResolved = true;
-      clearTimeout(fallbackTimer);
-      if (!isSimulating && typeof startGPSTracking === "function") {
-        startGPSTracking();
-      }
+    } catch (fallbackCatch) {
+      console.warn("[Geolocation] Fallback exception:", fallbackCatch);
     }
+    return;
+  }
+
+  // If network fallback also fails or times out
+  if (typeof showRadarToast === "function") {
+    showRadarToast("📍 GPS SIGNAL WEAK", "Waiting for GPS satellite fix. Tap RECENTER to retry.");
+  }
+}
+
+function requestQuickGeolocation() {
+  if (isSimulating) return;
+
+  if (!("geolocation" in navigator) || typeof navigator.geolocation.getCurrentPosition !== "function") {
+    console.warn("[Geolocation] Geolocation API not supported in this browser.");
+    if (typeof showRadarToast === "function") {
+      showRadarToast("GPS NOT SUPPORTED", "Your browser does not support HTML5 Geolocation.");
+    }
+    return;
+  }
+
+  // Primary: High-accuracy GPS with 15s timeout and maximumAge: 0 (no stale cache)
+  try {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        handleGeolocationSuccess(pos, false);
+      },
+      (err) => {
+        handleGeolocationError(err, "primary");
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
   } catch (geoCatch) {
-    if (!hasResolved) {
-      hasResolved = true;
-      clearTimeout(fallbackTimer);
-      console.warn("Geolocation try/catch captured exception:", geoCatch);
-      if (typeof map !== "undefined" && map) {
-        map.setView([DHAKA_LAT, DHAKA_LNG], 13);
-        map.invalidateSize();
-      }
-      if (!isSimulating && typeof startGPSTracking === "function") {
-        startGPSTracking();
-      }
-    }
+    console.warn("[Geolocation] Primary exception:", geoCatch);
   }
 }
 
 function startGPSTracking() {
   if (isSimulating) return;
 
-  if (!("geolocation" in navigator)) {
-    console.warn("Geolocation API not supported. Falling back to simulation.");
-    startHighwaySimulation();
+  if (!("geolocation" in navigator) || typeof navigator.geolocation.watchPosition !== "function") {
+    console.warn("Geolocation API not supported.");
     return;
+  }
+
+  if (watchId !== null) {
+    try {
+      navigator.geolocation.clearWatch(watchId);
+    } catch (e) {}
+    watchId = null;
   }
 
   const options = {
@@ -3718,13 +3838,18 @@ function startGPSTracking() {
 
       const { latitude, longitude, speed, heading, accuracy } = pos.coords;
       const speedKmH = speed !== null && speed >= 0 ? speed * 3.6 : 0;
-      const validHeading = heading !== null && !isNaN(heading) ? heading : riderLocation.heading;
+      const validHeading = heading !== null && !isNaN(heading) ? heading : (riderLocation.heading || 0);
 
       riderLocation.lat = latitude;
       riderLocation.lng = longitude;
       riderLocation.speed = speedKmH;
       riderLocation.heading = validHeading;
-      riderLocation.accuracy = accuracy;
+      riderLocation.accuracy = accuracy || 10;
+      riderLocation.hasRealGps = true;
+
+      if (typeof window.showGpsPermissionModal === "function") {
+        window.showGpsPermissionModal(false);
+      }
 
       updateUserMarker(latitude, longitude, validHeading);
       updateSpeedometerDisplay(speedKmH);
@@ -3739,8 +3864,8 @@ function startGPSTracking() {
     },
     (err) => {
       console.warn("GPS tracking notice:", err.message);
-      if (!isSimulating && userMarker === null) {
-        startHighwaySimulation();
+      if (err.code === 1 && typeof window.showGpsPermissionModal === "function") {
+        window.showGpsPermissionModal(true);
       }
     },
     options
@@ -7315,6 +7440,90 @@ function initApp() {
   } catch (pttErr) {
     console.warn("PTT Communicator init notice:", pttErr);
   }
+
+  // 7. Check In-App Browser (FB / Insta) & Setup GPS Modal Events
+  try {
+    checkInAppBrowser();
+    initGpsPermissionModalEvents();
+  } catch (iabErr) {
+    console.warn("IAB / GPS Modal init notice:", iabErr);
+  }
+}
+
+// ==========================================
+// 19. IN-APP BROWSER (FACEBOOK/INSTAGRAM) & REAL GPS ENFORCEMENT
+// ==========================================
+function checkInAppBrowser() {
+  try {
+    const ua = navigator.userAgent || navigator.vendor || window.opera || "";
+    const isFbOrInsta = /FBAN|FBAV|FB_IAB|FBIOS|Instagram/i.test(ua);
+    const isAndroid = /Android/i.test(ua);
+
+    if (isFbOrInsta) {
+      const banner = document.getElementById("iabWarningBanner");
+      const chromeBtn = document.getElementById("iabOpenChromeBtn");
+      const dismissBtn = document.getElementById("dismissIabBannerBtn");
+
+      if (banner) {
+        banner.classList.remove("hidden");
+        document.body.classList.add("has-iab-banner");
+      }
+
+      if (chromeBtn && isAndroid) {
+        chromeBtn.classList.remove("hidden");
+        chromeBtn.onclick = function() {
+          const fullUrl = window.location.host + window.location.pathname + window.location.search;
+          window.location.href = 'intent://' + fullUrl + '#Intent;scheme=https;package=com.android.chrome;end';
+        };
+      }
+
+      if (dismissBtn) {
+        dismissBtn.onclick = function() {
+          if (banner) banner.classList.add("hidden");
+          document.body.classList.remove("has-iab-banner");
+        };
+      }
+    }
+  } catch (e) {
+    console.warn("In-App Browser detection error handled:", e);
+  }
+}
+
+function initGpsPermissionModalEvents() {
+  const retryBtn = document.getElementById("retryGpsBtn");
+  if (retryBtn) {
+    retryBtn.onclick = function() {
+      if (typeof window.showGpsPermissionModal === "function") {
+        window.showGpsPermissionModal(false);
+      }
+      if (typeof showRadarToast === "function") {
+        showRadarToast("REQUESTING GPS", "Requesting real GPS location access...");
+      }
+      if (typeof requestQuickGeolocation === "function") {
+        requestQuickGeolocation();
+      }
+    };
+  }
+
+  const closeBtn = document.getElementById("closeGpsModalBtn");
+  if (closeBtn) {
+    closeBtn.onclick = function() {
+      if (typeof window.showGpsPermissionModal === "function") {
+        window.showGpsPermissionModal(false);
+      }
+    };
+  }
+}
+
+// Run IAB check as early as DOM allows
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => {
+    checkInAppBrowser();
+    initGpsPermissionModalEvents();
+  });
+} else {
+  checkInAppBrowser();
+  initGpsPermissionModalEvents();
 }
 
 // Ensure initApp executes reliably even if DOMContentLoaded already fired

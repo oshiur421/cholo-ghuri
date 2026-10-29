@@ -433,6 +433,37 @@ body.map-day-mode #leaveTourBtn:hover {
   color: #991b1b !important;
 }
 
+/* 9. In-App Browser Warning Banner & GPS Permission Modal in Day Mode */
+body.map-day-mode #iabWarningBanner {
+  background: rgba(254, 243, 199, 0.98) !important;
+  border-bottom: 2px solid #d97706 !important;
+  color: #78350f !important;
+  box-shadow: 0 4px 20px rgba(217, 119, 6, 0.25) !important;
+}
+body.map-day-mode #iabWarningBanner p {
+  color: #92400e !important;
+}
+body.map-day-mode #iabWarningBanner .font-cyber {
+  color: #b45309 !important;
+}
+body.map-day-mode #gpsPermissionModal .glass-panel-neon {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border: 2px solid #f59e0b !important;
+  color: #0f172a !important;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25) !important;
+}
+body.map-day-mode #gpsPermissionModal h3 {
+  color: #0f172a !important;
+}
+body.map-day-mode #gpsPermissionModal p {
+  color: #334155 !important;
+}
+body.map-day-mode #gpsPermissionModal .bg-slate-900\/80 {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #475569 !important;
+}
+
 .hud-top-bar {
   position: fixed !important;
   top: 0 !important;
@@ -553,6 +584,32 @@ body.map-day-mode #leaveTourBtn:hover {
   position: fixed !important;
   inset: 0 !important;
   z-index: 99999 !important;
+}
+
+#gpsPermissionModal {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 100010 !important;
+}
+
+#iabWarningBanner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100020;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7), 0 0 25px rgba(245, 158, 11, 0.35);
+  animation: subAlertSlideDown 0.3s ease-out forwards;
+}
+
+body.has-iab-banner .hud-top-bar {
+  top: 76px !important;
+}
+
+@media (max-width: 640px) {
+  body.has-iab-banner .hud-top-bar {
+    top: 96px !important;
+  }
 }
 
 /* ==================== CHOLO GHURI BRAND LOGO ==================== */
