@@ -278,21 +278,30 @@
   <!-- ==================== IN-APP BROWSER (FACEBOOK/INSTAGRAM) WARNING BANNER ==================== -->
   <div id="iabWarningBanner" class="hidden fixed top-0 left-0 right-0 z-[100020] bg-slate-950/95 border-b-2 border-amber-500 shadow-[0_4px_25px_rgba(245,158,11,0.5)] px-3 py-2.5 sm:px-4 sm:py-3 text-slate-100 flex flex-col sm:flex-row items-center justify-between gap-2.5 backdrop-blur-xl">
     <div class="flex items-start sm:items-center gap-2.5 min-w-0 flex-1">
-      <div class="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400 text-base flex-shrink-0">
-        ⚠️
+      <div class="iab-icon-box w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400 flex-shrink-0">
+        <svg class="iab-warning-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/>
+          <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
       </div>
       <div class="flex flex-col min-w-0 text-left">
         <span class="font-cyber font-bold text-xs sm:text-sm text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
           In-App Browser GPS Restriction
         </span>
         <p id="iabWarningText" class="font-sans text-[11px] sm:text-xs text-slate-200 mt-0.5 leading-snug">
-          ⚠️ Facebook's in-app browser blocks GPS! To get your Real Location, click the three dots (⋮) on the top right and select <strong>'Open in System Browser / Chrome'</strong>.
+          Facebook's in-app browser blocks GPS! To get your Real Location, click the three dots (⋮) on the top right and select <strong>'Open in System Browser / Chrome'</strong>.
         </p>
       </div>
     </div>
     <div class="flex items-center gap-2 w-full sm:w-auto justify-end flex-shrink-0">
       <button id="iabOpenChromeBtn" type="button" class="hidden px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-cyber font-bold text-xs uppercase shadow-[0_0_15px_rgba(0,255,135,0.4)] flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap active:scale-95">
-        <span>🚀 Open in Chrome</span>
+        <svg class="iab-chrome-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+          <polyline points="15 3 21 3 21 9"/>
+          <line x1="10" y1="14" x2="21" y2="3"/>
+        </svg>
+        <span>Open in Chrome</span>
       </button>
       <button id="dismissIabBannerBtn" type="button" class="p-1.5 px-2.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer text-xs" title="Dismiss Notice">
         <i class="fa-solid fa-xmark"></i>
